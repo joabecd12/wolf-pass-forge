@@ -1,0 +1,7 @@
+project_id = "fffxxlobeegrzpdtfsgf"
+
+[functions.process-email-queue]
+verify_jwt = false
+
+[functions.webhook-sales]
+verify_jwt = false
