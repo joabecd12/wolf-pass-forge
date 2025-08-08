@@ -4,10 +4,11 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Webhook, CheckCircle, XCircle, AlertCircle, Eye, RefreshCw } from "lucide-react";
+import { Webhook, CheckCircle, XCircle, AlertCircle, Eye, RefreshCw, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from 'date-fns-tz';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 
 interface WebhookLog {
   id: string;
@@ -31,6 +32,17 @@ export function WebhookLogsPanel() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [originFilter, setOriginFilter] = useState<string>("all");
   const [selectedLog, setSelectedLog] = useState<WebhookLog | null>(null);
+
+  const { toast } = useToast();
+  const webhookUrl = "https://validapass.com.br/webhooks/venda";
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(webhookUrl);
+      toast({ title: "URL copiada", description: "Cole na plataforma de pagamento para ativar o webhook." });
+    } catch (e) {
+      toast({ title: "Falha ao copiar", description: "Copie manualmente a URL.", variant: "destructive" });
+    }
+  };
 
   const loadLogs = async () => {
     try {
@@ -117,6 +129,33 @@ export function WebhookLogsPanel() {
 
   return (
     <div className="space-y-6">
+      {/* URL pública do webhook */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Webhook className="h-5 w-5" />
+              Endpoint público de Webhook
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col md:flex-row md:items-center gap-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <code className="text-sm break-all">{webhookUrl}</code>
+                <Button variant="outline" size="sm" onClick={handleCopy} aria-label="Copiar URL do webhook">
+                  <Copy className="h-4 w-4 mr-2" /> Copiar
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                Copie esta URL e cole na plataforma de pagamento (ex: Hubla, Monetizze, Hotmart, etc) para que os participantes sejam adicionados automaticamente ao sistema após a compra.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Header with filters */}
       <Card>
         <CardHeader>
