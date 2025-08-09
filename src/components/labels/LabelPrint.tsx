@@ -167,6 +167,9 @@ export const printLabel = async (participant: Participant) => {
         <html>
           <head>
             <title>Etiqueta - ${participant.name}</title>
+            <link rel="icon" href="/lovable-uploads/6f306e0d-afed-4059-8f01-8f745bae3aa0.png" type="image/png">
+            <link rel="apple-touch-icon" href="/lovable-uploads/6f306e0d-afed-4059-8f01-8f745bae3aa0.png">
+            <meta name="msapplication-TileImage" content="/lovable-uploads/6f306e0d-afed-4059-8f01-8f745bae3aa0.png">
             <style>
               * {
                 margin: 0;
