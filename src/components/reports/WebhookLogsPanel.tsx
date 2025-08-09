@@ -34,7 +34,7 @@ export function WebhookLogsPanel() {
   const [selectedLog, setSelectedLog] = useState<WebhookLog | null>(null);
 
   const { toast } = useToast();
-  const webhookUrl = "https://validapass.com.br/webhooks/venda";
+  const webhookUrl = "https://ingressowolf.com.br/webhooks/venda";
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(webhookUrl);
