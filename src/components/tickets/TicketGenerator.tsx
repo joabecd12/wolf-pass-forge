@@ -73,6 +73,11 @@ export class TicketGenerator {
 
     const categoryColor = getCategoryColor(participant.category);
 
+    const escape = (s: string) => String(s).replace(/[&<>"'`=\\/]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '/': '&#x2F;', '`': '&#x60;', '=': '&#x3D;' } as Record<string, string>)[c] || c);
+    const safeName = escape(participant.name);
+    const safeEmail = escape(participant.email);
+    const safeCategory = escape(participant.category);
+
     return `
       <div style="
         width: 800px;
@@ -120,7 +125,7 @@ export class TicketGenerator {
               text-align: center;
               margin-bottom: 30px;
               text-transform: uppercase;
-            ">${participant.category}</div>
+            ">${safeCategory}</div>
           </div>
           
           <div style="color: #cccccc; font-size: 14px; line-height: 1.8;">
@@ -159,14 +164,14 @@ export class TicketGenerator {
               margin-bottom: 10px;
               word-wrap: break-word;
               line-height: 1.2;
-            ">${participant.name}</div>
+            ">${safeName}</div>
             
             <div style="
               font-size: 14px;
               color: #666;
               margin-bottom: 30px;
               word-wrap: break-word;
-            ">${participant.email}</div>
+            ">${safeEmail}</div>
           </div>
           
           <div style="text-align: center;">

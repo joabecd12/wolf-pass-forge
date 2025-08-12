@@ -14,6 +14,11 @@ interface LabelPrintProps {
   onClose?: () => void;
 }
 
+export const escapeHtml = (str: string) =>
+  String(str).replace(/[&<>"'`=\\/]/g, (s) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '/': '&#x2F;', '`': '&#x60;', '=': '&#x3D;' } as Record<string, string>)[s] || s
+  );
+
 export const LabelPrint: React.FC<LabelPrintProps> = ({ participant, onClose }) => {
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -166,7 +171,7 @@ export const printLabel = async (participant: Participant) => {
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Etiqueta - ${participant.name}</title>
+            <title>Etiqueta - ${escapeHtml(participant.name)}</title>
             <link rel="icon" href="/lovable-uploads/6f306e0d-afed-4059-8f01-8f745bae3aa0.png" type="image/png">
             <link rel="apple-touch-icon" href="/lovable-uploads/6f306e0d-afed-4059-8f01-8f745bae3aa0.png">
             <meta name="msapplication-TileImage" content="/lovable-uploads/6f306e0d-afed-4059-8f01-8f745bae3aa0.png">
@@ -270,8 +275,8 @@ export const printLabel = async (participant: Participant) => {
             <div class="etiqueta">
               <div class="info">
                 <div class="event-title">WOLF DAY BRAZIL</div>
-                <div class="participant-name">${participant.name}</div>
-                <div class="participant-category">${participant.category}</div>
+                <div class="participant-name">${escapeHtml(participant.name)}</div>
+                <div class="participant-category">${escapeHtml(participant.category)}</div>
                 <div class="participant-id">ID: ${participant.id ? participant.id.substring(0, 8).toUpperCase() : 'N/A'}</div>
               </div>
               

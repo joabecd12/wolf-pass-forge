@@ -256,6 +256,11 @@ async function sendTicketEmail(participantId: string, ticketId: string, saleData
 
     const ticket = participant.tickets[0];
 
+    const escape = (s: string) => String(s).replace(/[&<>"'`=\\/]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '/': '&#x2F;', '`': '&#x60;', '=': '&#x3D;' } as Record<string, string>)[c] || c);
+    const safeCategory = escape(saleData.category);
+    const safeName = escape(participant.name);
+    const safeEmail = escape(participant.email);
+
     // Generate ticket HTML content
     const ticketHtml = `
       <!DOCTYPE html>
@@ -274,13 +279,13 @@ async function sendTicketEmail(participantId: string, ticketId: string, saleData
         <div class="ticket">
           <div class="header">
             <h1>Seu Ingresso</h1>
-            <h2>${saleData.category}</h2>
+            <h2>${safeCategory}</h2>
           </div>
           
           <div class="info">
-            <strong>Nome:</strong> ${participant.name}<br>
-            <strong>Email:</strong> ${participant.email}<br>
-            <strong>Categoria:</strong> ${participant.category}<br>
+            <strong>Nome:</strong> ${safeName}<br>
+            <strong>Email:</strong> ${safeEmail}<br>
+            <strong>Categoria:</strong> ${safeCategory}<br>
             <strong>Código:</strong> ${participant.short_id || ticket.id.substring(0, 8)}
           </div>
           
@@ -300,7 +305,7 @@ async function sendTicketEmail(participantId: string, ticketId: string, saleData
     const emailResponse = await resend.emails.send({
       from: "Evento <noreply@validapass.com.br>",
       to: [participant.email],
-      subject: `Seu ingresso ${saleData.category} está pronto!`,
+      subject: `Seu ingresso ${safeCategory} está pronto!`,
       html: ticketHtml,
     });
 
@@ -353,6 +358,16 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    const configuredSecret = Deno.env.get("WEBHOOK_SHARED_SECRET");
+    const providedSecret = req.headers.get("x-webhook-secret");
+    if (!configuredSecret || !providedSecret || configuredSecret !== providedSecret) {
+      console.warn("Unauthorized webhook attempt: missing or invalid secret header");
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
     const rawPayload = await req.json();
     console.log("Received webhook payload:", JSON.stringify(rawPayload, null, 2));
 
