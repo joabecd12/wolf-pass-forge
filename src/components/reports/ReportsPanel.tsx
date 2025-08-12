@@ -148,6 +148,22 @@ export function ReportsPanel() {
     }
   };
 
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const item = categoryData.find((d) => d.category === label);
+      if (!item) return null;
+      return (
+        <div className="rounded-md border bg-background p-3 shadow-sm">
+          <div className="font-medium">{label}</div>
+          <div className="text-sm text-muted-foreground">Total: {item.total}</div>
+          <div className="text-sm text-green-600">Validados: {item.validated}</div>
+          <div className="text-sm text-orange-600">Pendentes: {item.pending}</div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -232,9 +248,12 @@ export function ReportsPanel() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="category" />
                   <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="validated" fill="#22c55e" name="Validados" />
-                  <Bar dataKey="pending" fill="#f59e0b" name="Pendentes" />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="total" name="Total">
+                    {categoryData.map((entry) => (
+                      <Cell key={entry.category} fill={COLORS[entry.category as keyof typeof COLORS] || "#8884d8"} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
