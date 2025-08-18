@@ -358,14 +358,24 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const configuredSecret = Deno.env.get("WEBHOOK_SHARED_SECRET");
-    const providedSecret = req.headers.get("x-webhook-secret");
-    if (!configuredSecret || !providedSecret || configuredSecret !== providedSecret) {
-      console.warn("Unauthorized webhook attempt: missing or invalid secret header");
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
+    // Check for Hubla Bearer token authentication
+    const hublaToken = Deno.env.get("HUBLA_WEBHOOK_TOKEN");
+    const authHeader = req.headers.get("Authorization");
+    
+    if (hublaToken && authHeader === `Bearer ${hublaToken}`) {
+      // Valid Hubla authentication, proceed
+    } else {
+      // Fallback to x-webhook-secret for other providers
+      const configuredSecret = Deno.env.get("WEBHOOK_SHARED_SECRET");
+      const providedSecret = req.headers.get("x-webhook-secret");
+      
+      if (!configuredSecret || !providedSecret || configuredSecret !== providedSecret) {
+        console.warn("Unauthorized webhook attempt: invalid Bearer token and missing/invalid x-webhook-secret header");
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
     }
 
     const rawPayload = await req.json();
