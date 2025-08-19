@@ -1,12 +1,16 @@
 // supabase/functions/webhook-sales/index.ts
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Resend } from "npm:resend@2.0.0";
 
 // CORS (útil para testes manuais com cURL e para provedores)
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-hubla-token, x-hubla-webhook-token",
 };
+
+// Resend client para envio imediato de emails
+const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
 // Helpers
 function get<T = any>(obj: any, path: string, fallback?: T): T | undefined {
@@ -108,6 +112,7 @@ serve(async (req: Request) => {
   let assignedCategory: "Wolf Gold" | "Wolf Black" | "VIP Wolf" = resolveCategory(offerName, productName);
   let status = "received";
   let errorMessage: string | null = null;
+  let isNewSale = false;
 
   try {
     if (!userEmail || !transactionId) {
@@ -135,6 +140,7 @@ serve(async (req: Request) => {
           created_at: createdAt ?? null,
           paid_at: paidAt ?? null,
         });
+        isNewSale = true;
       }
     } catch (e) {
       console.error("Falha ao registrar wolf_sales:", e);
@@ -188,6 +194,62 @@ serve(async (req: Request) => {
     } catch (e) {
       console.error("Falha ao garantir ticket:", e);
       // segue fluxo
+    }
+    // 3.4) Envia email imediatamente (apenas em nova venda)
+    try {
+      if (isNewSale && userEmail && participantId) {
+        // buscar QR code do ticket
+        const { data: ticketRow } = await supabase
+          .from("tickets")
+          .select("qr_code")
+          .eq("participant_id", participantId)
+          .maybeSingle();
+        const qr = ticketRow?.qr_code ?? participantId;
+
+        const subject = "Seu ingresso Wolf Day Brazil";
+        const html = `
+          <div style="font-family:Arial,Helvetica,sans-serif; color:#1f2937;">
+            <h2 style="margin:0 0 12px; font-size:20px; color:#111827;">Olá, ${userName ?? 'participante'}!</h2>
+            <p style="margin:0 0 8px;">Seu ingresso para o <strong>Wolf Day Brazil</strong> foi gerado com sucesso.</p>
+            <p style="margin:0 0 8px;">Categoria do ingresso: <strong>${assignedCategory}</strong></p>
+            <p style="margin:12px 0 4px;">Apresente este código no acesso:</p>
+            <pre style="background:#f3f4f6; padding:12px; border-radius:8px; font-size:14px;">${qr}</pre>
+            <p style="margin:12px 0 0;">Guarde este email. Nos vemos no evento! 🐺</p>
+          </div>
+        `;
+
+        if (Deno.env.get("RESEND_API_KEY")) {
+          try {
+            await resend.emails.send({
+              from: "Wolf Day Brazil <noreply@wolfdaybr.com.br>",
+              to: [userEmail],
+              subject,
+              html,
+            });
+            console.log(`Email de ingresso enviado para ${userEmail}`);
+          } catch (sendErr) {
+            console.error("Falha ao enviar via Resend, adicionando à fila:", sendErr);
+            await supabase.from("email_queue").insert({
+              participant_id: participantId,
+              email: userEmail,
+              subject,
+              html_content: html,
+              status: 'pending',
+            });
+          }
+        } else {
+          console.warn("RESEND_API_KEY ausente. Encaminhando email para a fila.");
+          await supabase.from("email_queue").insert({
+            participant_id: participantId,
+            email: userEmail,
+            subject,
+            html_content: html,
+            status: 'pending',
+          });
+        }
+      }
+    } catch (emailErr) {
+      console.error("Erro etapa de email:", emailErr);
     }
 
     status = "processed";
