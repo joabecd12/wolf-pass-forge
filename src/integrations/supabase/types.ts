@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.12 (cd3cf9e)"
@@ -94,6 +94,33 @@ export type Database = {
           },
         ]
       }
+      hubla_raw_events: {
+        Row: {
+          id: string
+          payload: Json
+          provider: string
+          received_at: string
+          transaction_id: string | null
+          type: string
+        }
+        Insert: {
+          id?: string
+          payload: Json
+          provider?: string
+          received_at?: string
+          transaction_id?: string | null
+          type: string
+        }
+        Update: {
+          id?: string
+          payload?: Json
+          provider?: string
+          received_at?: string
+          transaction_id?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
       participants: {
         Row: {
           category: Database["public"]["Enums"]["ticket_category"]
@@ -105,6 +132,8 @@ export type Database = {
           phone: string | null
           presencas: Json | null
           short_id: string | null
+          status: string | null
+          transaction_id: string | null
           updated_at: string
         }
         Insert: {
@@ -117,6 +146,8 @@ export type Database = {
           phone?: string | null
           presencas?: Json | null
           short_id?: string | null
+          status?: string | null
+          transaction_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -129,6 +160,8 @@ export type Database = {
           phone?: string | null
           presencas?: Json | null
           short_id?: string | null
+          status?: string | null
+          transaction_id?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -254,6 +287,42 @@ export type Database = {
           product_name?: string | null
           raw_payload?: Json
           status?: string
+        }
+        Relationships: []
+      }
+      wolf_sales: {
+        Row: {
+          created_at: string | null
+          offer_name: string | null
+          paid_at: string | null
+          product_name: string | null
+          total_amount: number | null
+          transaction_id: string
+          user_email: string
+          user_name: string | null
+          user_phone: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          offer_name?: string | null
+          paid_at?: string | null
+          product_name?: string | null
+          total_amount?: number | null
+          transaction_id: string
+          user_email: string
+          user_name?: string | null
+          user_phone?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          offer_name?: string | null
+          paid_at?: string | null
+          product_name?: string | null
+          total_amount?: number | null
+          transaction_id?: string
+          user_email?: string
+          user_name?: string | null
+          user_phone?: string | null
         }
         Relationships: []
       }
