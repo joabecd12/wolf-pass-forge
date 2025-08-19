@@ -113,6 +113,8 @@ serve(async (req: Request) => {
   let status = "received";
   let errorMessage: string | null = null;
   let isNewSale = false;
+  let wasNewParticipant = false;
+  let wasNewTicket = false;
 
   try {
     if (!userEmail || !transactionId) {
@@ -172,6 +174,7 @@ serve(async (req: Request) => {
 
       if (insertParticipantErr) throw insertParticipantErr;
       participantId = inserted?.id ?? null;
+      wasNewParticipant = true;
     }
 
     if (!participantId) throw new Error("Falha ao obter participantId");
@@ -190,6 +193,7 @@ serve(async (req: Request) => {
           // Usamos o próprio ID do participante como QR (scanner e página de validação aceitam este formato)
           qr_code: participantId,
         });
+        wasNewTicket = true;
       }
     } catch (e) {
       console.error("Falha ao garantir ticket:", e);
@@ -197,7 +201,7 @@ serve(async (req: Request) => {
     }
     // 3.4) Envia email imediatamente (apenas em nova venda)
     try {
-      if (isNewSale && userEmail && participantId) {
+      if ((isNewSale || wasNewTicket) && userEmail && participantId) {
         // buscar QR code do ticket
         const { data: ticketRow } = await supabase
           .from("tickets")
