@@ -22,12 +22,33 @@ function get<T = any>(obj: any, path: string, fallback?: T): T | undefined {
   }
 }
 
-function resolveCategory(offerName?: string | null, productName?: string | null): "Wolf Gold" | "Wolf Black" | "VIP Wolf" {
-  const base = `${offerName ?? ""} ${productName ?? ""}`.toLowerCase();
+const OFFER_ID_CATEGORY_MAP: Record<string, "Wolf Gold" | "Wolf Black" | "VIP Wolf"> = {
+  // Preencha com os IDs reais das ofertas, por exemplo:
+  // "offer-id-vip": "VIP Wolf",
+  // "offer-id-black": "Wolf Black",
+  // "offer-id-gold": "Wolf Gold",
+};
+
+function resolveCategory(input: {
+  offerId?: string | null;
+  offerNameV2?: string | null;
+  offerName?: string | null;
+  productName?: string | null;
+}): "Wolf Gold" | "Wolf Black" | "VIP Wolf" {
+  const { offerId, offerNameV2, offerName, productName } = input;
+
+  // 1) Prioriza mapeamento por offerId
+  if (offerId && OFFER_ID_CATEGORY_MAP[offerId]) {
+    return OFFER_ID_CATEGORY_MAP[offerId];
+  }
+
+  // 2) Depois tenta pelos nomes (novo campo) e, em seguida, pelos antigos
+  const base = `${offerNameV2 ?? ""} ${offerName ?? ""} ${productName ?? ""}`.toLowerCase();
   if (base.includes("vip")) return "VIP Wolf";
   if (base.includes("black")) return "Wolf Black";
   if (base.includes("gold")) return "Wolf Gold";
-  // Default seguro (enum existente)
+
+  // 3) Fallback seguro
   return "Wolf Gold";
 }
 
@@ -95,7 +116,11 @@ serve(async (req: Request) => {
   const paidAt = get<string>(event, "paidAt") ?? get<string>(data, "paidAt") ?? null;
   const createdAt = get<string>(event, "createdAt") ?? get<string>(data, "createdAt") ?? null;
 
-  // 2.1) Log de auditoria - salvar bruto
+// Campos v2 (prioritários) do payload Hubla
+const offerIdV2 = get<string>(event, "products.0.offers.0.id") ?? get<string>(data, "products.0.offers.0.id") ?? null;
+const offerNameV2 = get<string>(event, "products.0.offers.0.name") ?? get<string>(data, "products.0.offers.0.name") ?? null;
+
+// 2.1) Log de auditoria - salvar bruto
   try {
     await supabase.from("hubla_raw_events").insert({
       provider: "hubla",
@@ -109,7 +134,12 @@ serve(async (req: Request) => {
 
   // 3) Fluxo de processamento (somente se houver email e transação)
   let participantId: string | null = null;
-  let assignedCategory: "Wolf Gold" | "Wolf Black" | "VIP Wolf" = resolveCategory(offerName, productName);
+let assignedCategory: "Wolf Gold" | "Wolf Black" | "VIP Wolf" = resolveCategory({
+  offerId: offerIdV2,
+  offerNameV2,
+  offerName,
+  productName,
+});
   let status = "received";
   let errorMessage: string | null = null;
   let isNewSale = false;
@@ -270,6 +300,8 @@ serve(async (req: Request) => {
         buyer_email: userEmail,
         buyer_name: userName,
         product_name: productName,
+        offer_id: offerIdV2,
+        offer_name_v2: offerNameV2,
         product_id: transactionId ?? null,
         assigned_category: assignedCategory,
         participant_id: participantId,

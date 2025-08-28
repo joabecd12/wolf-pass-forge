@@ -250,6 +250,8 @@ export type Database = {
           created_at: string
           error_message: string | null
           id: string
+          offer_id: string | null
+          offer_name_v2: string | null
           origin: string
           participant_id: string | null
           processed_at: string
@@ -265,6 +267,8 @@ export type Database = {
           created_at?: string
           error_message?: string | null
           id?: string
+          offer_id?: string | null
+          offer_name_v2?: string | null
           origin: string
           participant_id?: string | null
           processed_at?: string
@@ -280,6 +284,8 @@ export type Database = {
           created_at?: string
           error_message?: string | null
           id?: string
+          offer_id?: string | null
+          offer_name_v2?: string | null
           origin?: string
           participant_id?: string | null
           processed_at?: string
