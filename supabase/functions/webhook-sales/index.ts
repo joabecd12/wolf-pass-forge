@@ -106,15 +106,31 @@ serve(async (req: Request) => {
   const event = get<any>(data, "event") ?? data;
   const type = (get<string>(data, "type") ?? "").toString() || "unknown";
 
-  const userEmail = get<string>(event, "userEmail") ?? get<string>(data, "userEmail") ?? null;
-  const userName = get<string>(event, "userName") ?? get<string>(data, "userName") ?? null;
-  const userPhone = get<string>(event, "userPhone") ?? get<string>(data, "userPhone") ?? null;
-  const productName = get<string>(event, "productName") ?? get<string>(data, "productName") ?? null;
-  const offerName = get<string>(event, "offerName") ?? get<string>(data, "offerName") ?? null;
-  const transactionId = get<string>(event, "transactionId") ?? get<string>(data, "transactionId") ?? null;
-  const totalAmount = get<number>(event, "totalAmount") ?? get<number>(data, "totalAmount") ?? null;
-  const paidAt = get<string>(event, "paidAt") ?? get<string>(data, "paidAt") ?? null;
-  const createdAt = get<string>(event, "createdAt") ?? get<string>(data, "createdAt") ?? null;
+// v2 fields
+const userEmailV2 = get<string>(event, "user.email") ?? get<string>(event, "customer.email") ?? get<string>(event, "buyer.email") ?? get<string>(data, "user.email") ?? null;
+const userNameV2 = get<string>(event, "user.name") ?? get<string>(event, "customer.name") ?? get<string>(event, "buyer.name") ?? get<string>(data, "user.name") ?? null;
+const transactionIdV2 = get<string>(event, "invoice.id") ?? get<string>(event, "purchase.id") ?? get<string>(event, "order.id") ?? get<string>(data, "invoice.id") ?? null;
+const invoiceStatus = get<string>(event, "invoice.status") ?? get<string>(data, "invoice.status") ?? get<string>(event, "status") ?? null;
+const paidAtV2 = get<string>(event, "invoice.paid_at") ?? get<string>(event, "invoice.paidAt") ?? get<string>(data, "invoice.paid_at") ?? null;
+const createdAtV2 = get<string>(event, "invoice.created_at") ?? get<string>(event, "invoice.createdAt") ?? get<string>(data, "invoice.created_at") ?? null;
+
+// legacy v1 fields
+const userEmailLegacy = get<string>(event, "userEmail") ?? get<string>(data, "userEmail") ?? null;
+const userNameLegacy = get<string>(event, "userName") ?? get<string>(data, "userName") ?? null;
+const userPhone = get<string>(event, "userPhone") ?? get<string>(data, "userPhone") ?? null;
+const productName = get<string>(event, "productName") ?? get<string>(data, "productName") ?? null;
+const offerName = get<string>(event, "offerName") ?? get<string>(data, "offerName") ?? null;
+const transactionIdLegacy = get<string>(event, "transactionId") ?? get<string>(data, "transactionId") ?? null;
+const totalAmount = get<number>(event, "totalAmount") ?? get<number>(data, "totalAmount") ?? null;
+const paidAtLegacy = get<string>(event, "paidAt") ?? get<string>(data, "paidAt") ?? null;
+const createdAtLegacy = get<string>(event, "createdAt") ?? get<string>(data, "createdAt") ?? null;
+
+// resolved fields (prefer v2)
+const userEmail = userEmailV2 ?? userEmailLegacy;
+const userName = userNameV2 ?? userNameLegacy;
+const transactionId = transactionIdV2 ?? transactionIdLegacy;
+const paidAt = paidAtV2 ?? paidAtLegacy;
+const createdAt = createdAtV2 ?? createdAtLegacy;
 
 // Campos v2 (prioritários) do payload Hubla
 const offerIdV2 = get<string>(event, "products.0.offers.0.id") ?? get<string>(data, "products.0.offers.0.id") ?? null;
@@ -152,6 +168,13 @@ let assignedCategory: "Wolf Gold" | "Wolf Black" | "VIP Wolf" = resolveCategory(
       throw new Error("Payload incompleto: é necessário userEmail e transactionId");
     }
 
+    // 3.0) Processa somente eventos pagos quando o status existir
+    const knownPaid = new Set(["paid","approved","succeeded","completed","authorized","confirmed","settled"]);
+    const hasStatus = typeof invoiceStatus === "string" && invoiceStatus.length > 0;
+    if (hasStatus && !knownPaid.has(invoiceStatus!.toLowerCase())) {
+      status = "skipped_unpaid";
+      throw new Error(`Evento ignorado: invoice.status='${invoiceStatus}'`);
+    }
     // 3.1) Registra/atualiza venda em wolf_sales (evita duplicar por transaction_id)
     try {
       const { data: existing } = await supabase
