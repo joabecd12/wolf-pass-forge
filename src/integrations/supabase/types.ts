@@ -244,16 +244,19 @@ export type Database = {
       }
       webhook_sales_logs: {
         Row: {
+          amount_cents: number | null
           assigned_category: string | null
           buyer_email: string | null
           buyer_name: string | null
           created_at: string
           error_message: string | null
           id: string
+          name_source: string | null
           offer_id: string | null
           offer_name_v2: string | null
           origin: string
           participant_id: string | null
+          phone_source: string | null
           processed_at: string
           product_id: string | null
           product_name: string | null
@@ -261,16 +264,19 @@ export type Database = {
           status: string
         }
         Insert: {
+          amount_cents?: number | null
           assigned_category?: string | null
           buyer_email?: string | null
           buyer_name?: string | null
           created_at?: string
           error_message?: string | null
           id?: string
+          name_source?: string | null
           offer_id?: string | null
           offer_name_v2?: string | null
           origin: string
           participant_id?: string | null
+          phone_source?: string | null
           processed_at?: string
           product_id?: string | null
           product_name?: string | null
@@ -278,16 +284,19 @@ export type Database = {
           status: string
         }
         Update: {
+          amount_cents?: number | null
           assigned_category?: string | null
           buyer_email?: string | null
           buyer_name?: string | null
           created_at?: string
           error_message?: string | null
           id?: string
+          name_source?: string | null
           offer_id?: string | null
           offer_name_v2?: string | null
           origin?: string
           participant_id?: string | null
+          phone_source?: string | null
           processed_at?: string
           product_id?: string | null
           product_name?: string | null
