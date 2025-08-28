@@ -106,31 +106,114 @@ serve(async (req: Request) => {
   const event = get<any>(data, "event") ?? data;
   const type = (get<string>(data, "type") ?? "").toString() || "unknown";
 
-// v2 fields
-const userEmailV2 = get<string>(event, "user.email") ?? get<string>(event, "customer.email") ?? get<string>(event, "buyer.email") ?? get<string>(data, "user.email") ?? null;
-const userNameV2 = get<string>(event, "user.name") ?? get<string>(event, "customer.name") ?? get<string>(event, "buyer.name") ?? get<string>(data, "user.name") ?? null;
-const transactionIdV2 = get<string>(event, "invoice.id") ?? get<string>(event, "purchase.id") ?? get<string>(event, "order.id") ?? get<string>(data, "invoice.id") ?? null;
-const invoiceStatus = get<string>(event, "invoice.status") ?? get<string>(data, "invoice.status") ?? get<string>(event, "status") ?? null;
-const paidAtV2 = get<string>(event, "invoice.paid_at") ?? get<string>(event, "invoice.paidAt") ?? get<string>(data, "invoice.paid_at") ?? null;
-const createdAtV2 = get<string>(event, "invoice.created_at") ?? get<string>(event, "invoice.createdAt") ?? get<string>(data, "invoice.created_at") ?? null;
+// v2 fields (priorities per Hubla v2 and business rules)
+const userEmailV2 = get<string>(event, "user.email")
+  ?? get<string>(event, "customer.email")
+  ?? get<string>(event, "buyer.email")
+  ?? get<string>(data, "user.email")
+  ?? null;
+
+const userFirst = get<string>(event, "user.firstname") ?? null;
+const userLast = get<string>(event, "user.lastname") ?? null;
+const userName_user = get<string>(event, "user.name") ?? null;
+const buyerName_v2 = get<string>(event, "buyer.name") ?? null;
+const customerName_v2 = get<string>(event, "customer.name") ?? null;
+
+const v2UserPhone = get<string>(event, "user.phone") ?? null;
+const v2BuyerPhone = get<string>(event, "buyer.phone") ?? null;
+const v2CustomerPhone = get<string>(event, "customer.phone") ?? null;
+
+const transactionIdV2 = get<string>(event, "invoice.id")
+  ?? get<string>(event, "purchase.id")
+  ?? get<string>(event, "order.id")
+  ?? get<string>(data, "invoice.id")
+  ?? null;
+const invoiceStatus = get<string>(event, "invoice.status")
+  ?? get<string>(data, "invoice.status")
+  ?? get<string>(event, "status")
+  ?? null;
+const paidAtV2 = get<string>(event, "invoice.paid_at")
+  ?? get<string>(event, "invoice.paidAt")
+  ?? get<string>(data, "invoice.paid_at")
+  ?? null;
+const createdAtV2 = get<string>(event, "invoice.created_at")
+  ?? get<string>(event, "invoice.createdAt")
+  ?? get<string>(data, "invoice.created_at")
+  ?? null;
+const amountCentsV2 = get<number>(event, "invoice.amount.totalCents")
+  ?? get<number>(data, "invoice.amount.totalCents")
+  ?? null;
 
 // legacy v1 fields
 const userEmailLegacy = get<string>(event, "userEmail") ?? get<string>(data, "userEmail") ?? null;
 const userNameLegacy = get<string>(event, "userName") ?? get<string>(data, "userName") ?? null;
-const userPhone = get<string>(event, "userPhone") ?? get<string>(data, "userPhone") ?? null;
+const legacyCustomerPhone = get<string>(data, "customer.phone")
+  ?? get<string>(data, "customer.whatsapp")
+  ?? get<string>(data, "customer.whatsapp_number")
+  ?? null;
 const productName = get<string>(event, "productName") ?? get<string>(data, "productName") ?? null;
 const offerName = get<string>(event, "offerName") ?? get<string>(data, "offerName") ?? null;
 const transactionIdLegacy = get<string>(event, "transactionId") ?? get<string>(data, "transactionId") ?? null;
-const totalAmount = get<number>(event, "totalAmount") ?? get<number>(data, "totalAmount") ?? null;
+const totalAmountLegacy = get<number>(event, "totalAmount") ?? get<number>(data, "totalAmount") ?? null;
 const paidAtLegacy = get<string>(event, "paidAt") ?? get<string>(data, "paidAt") ?? null;
 const createdAtLegacy = get<string>(event, "createdAt") ?? get<string>(data, "createdAt") ?? null;
 
-// resolved fields (prefer v2)
+// resolved core identifiers (prefer v2)
 const userEmail = userEmailV2 ?? userEmailLegacy;
-const userName = userNameV2 ?? userNameLegacy;
 const transactionId = transactionIdV2 ?? transactionIdLegacy;
 const paidAt = paidAtV2 ?? paidAtLegacy;
 const createdAt = createdAtV2 ?? createdAtLegacy;
+
+// resolve amount
+const amountCents = amountCentsV2 ?? null;
+const totalAmount = amountCents != null ? amountCents / 100 : (totalAmountLegacy ?? null);
+
+// resolve name (do NOT derive from email)
+const collapseWhitespace = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
+const firstLast = collapseWhitespace([userFirst, userLast].filter(Boolean).join(" "));
+let resolvedName = "";
+let nameSource: 'user.first+last' | 'user.name' | 'buyer.name' | 'customer.name' | 'fallback' = 'fallback';
+if (firstLast) {
+  resolvedName = firstLast;
+  nameSource = 'user.first+last';
+} else if (collapseWhitespace(userName_user)) {
+  resolvedName = collapseWhitespace(userName_user);
+  nameSource = 'user.name';
+} else if (collapseWhitespace(buyerName_v2)) {
+  resolvedName = collapseWhitespace(buyerName_v2);
+  nameSource = 'buyer.name';
+} else if (collapseWhitespace(customerName_v2)) {
+  resolvedName = collapseWhitespace(customerName_v2);
+  nameSource = 'customer.name';
+} else {
+  resolvedName = 'Cliente';
+  nameSource = 'fallback';
+}
+
+// resolve phone (digits only)
+const normalizePhone = (p?: string | null) => (p ?? "").replace(/\D/g, "");
+const phoneUser = normalizePhone(v2UserPhone);
+const phoneBuyer = normalizePhone(v2BuyerPhone);
+const phoneCustomer = normalizePhone(v2CustomerPhone);
+const phoneLegacy = normalizePhone(legacyCustomerPhone);
+let resolvedPhone: string | null = null;
+let phoneSource: 'user.phone' | 'buyer.phone' | 'customer.phone' | 'legacy.whatsapp' | 'none' = 'none';
+if (phoneUser) {
+  resolvedPhone = phoneUser;
+  phoneSource = 'user.phone';
+} else if (phoneBuyer) {
+  resolvedPhone = phoneBuyer;
+  phoneSource = 'buyer.phone';
+} else if (phoneCustomer) {
+  resolvedPhone = phoneCustomer;
+  phoneSource = 'customer.phone';
+} else if (phoneLegacy) {
+  resolvedPhone = phoneLegacy;
+  phoneSource = 'legacy.whatsapp';
+} else {
+  resolvedPhone = null;
+  phoneSource = 'none';
+}
 
 // Campos v2 (prioritários) do payload Hubla
 const offerIdV2 = get<string>(event, "products.0.offers.0.id") ?? get<string>(data, "products.0.offers.0.id") ?? null;
@@ -187,8 +270,8 @@ let assignedCategory: "Wolf Gold" | "Wolf Black" | "VIP Wolf" = resolveCategory(
         await supabase.from("wolf_sales").insert({
           user_email: userEmail,
           transaction_id: transactionId,
-          user_name: userName ?? null,
-          user_phone: userPhone ?? null,
+          user_name: resolvedName ?? null,
+          user_phone: resolvedPhone ?? null,
           product_name: productName ?? null,
           offer_name: offerName ?? null,
           total_amount: totalAmount ?? null,
@@ -205,20 +288,32 @@ let assignedCategory: "Wolf Gold" | "Wolf Black" | "VIP Wolf" = resolveCategory(
     // 3.2) Localiza ou cria participante
     const { data: existingParticipant } = await supabase
       .from("participants")
-      .select("id")
+      .select("id, phone, name")
       .eq("email", userEmail)
       .maybeSingle();
 
     if (existingParticipant?.id) {
       participantId = existingParticipant.id;
+      // Atualizar phone apenas se vazio e se temos um resolvido
+      if ((!existingParticipant.phone || existingParticipant.phone.length === 0) && resolvedPhone) {
+        try {
+          await supabase
+            .from("participants")
+            .update({ phone: resolvedPhone })
+            .eq("id", participantId);
+        } catch (e) {
+          console.error("Falha ao atualizar phone do participante:", e);
+        }
+      }
+      // Não sobrescrever name existente
     } else {
       // Criar participante novo
       const { data: inserted, error: insertParticipantErr } = await supabase
         .from("participants")
         .insert({
-          name: userName ?? userEmail.split("@")[0],
+          name: resolvedName,
           email: userEmail,
-          phone: userPhone ?? null,
+          phone: resolvedPhone ?? null,
           category: assignedCategory,
           presencas: {},
         })
@@ -266,7 +361,7 @@ let assignedCategory: "Wolf Gold" | "Wolf Black" | "VIP Wolf" = resolveCategory(
         const subject = "Seu ingresso Wolf Day Brazil";
         const html = `
           <div style="font-family:Arial,Helvetica,sans-serif; color:#1f2937;">
-            <h2 style="margin:0 0 12px; font-size:20px; color:#111827;">Olá, ${userName ?? 'participante'}!</h2>
+            <h2 style="margin:0 0 12px; font-size:20px; color:#111827;">Olá, ${resolvedName}!</h2>
             <p style="margin:0 0 8px;">Seu ingresso para o <strong>Wolf Day Brazil</strong> foi gerado com sucesso.</p>
             <p style="margin:0 0 8px;">Categoria do ingresso: <strong>${assignedCategory}</strong></p>
             <p style="margin:12px 0 4px;">Apresente este código no acesso:</p>
@@ -321,13 +416,16 @@ let assignedCategory: "Wolf Gold" | "Wolf Black" | "VIP Wolf" = resolveCategory(
         status,
         raw_payload: (typeof data === "object" ? data : { raw: textBody }) as any,
         buyer_email: userEmail,
-        buyer_name: userName,
+        buyer_name: resolvedName,
         product_name: productName,
         offer_id: offerIdV2,
         offer_name_v2: offerNameV2,
         product_id: transactionId ?? null,
         assigned_category: assignedCategory,
         participant_id: participantId,
+        amount_cents: amountCents ?? null,
+        name_source: nameSource,
+        phone_source: phoneSource,
         error_message: errorMessage,
       });
     } catch (e) {
