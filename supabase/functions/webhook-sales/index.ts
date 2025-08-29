@@ -113,8 +113,14 @@ const userEmailV2 = get<string>(event, "user.email")
   ?? get<string>(data, "user.email")
   ?? null;
 
-const userFirst = get<string>(event, "user.firstname") ?? null;
-const userLast = get<string>(event, "user.lastname") ?? null;
+const userFirst = get<string>(event, "user.firstName") 
+  ?? get<string>(event, "user.firstname") 
+  ?? get<string>(event, "user.first_name") 
+  ?? null;
+const userLast = get<string>(event, "user.lastName") 
+  ?? get<string>(event, "user.lastname") 
+  ?? get<string>(event, "user.last_name") 
+  ?? null;
 const userName_user = get<string>(event, "user.name") ?? null;
 const buyerName_v2 = get<string>(event, "buyer.name") ?? null;
 const customerName_v2 = get<string>(event, "customer.name") ?? null;
