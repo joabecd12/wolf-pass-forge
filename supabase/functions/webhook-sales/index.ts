@@ -353,7 +353,7 @@ let assignedCategory: "Wolf Gold" | "Wolf Black" | "VIP Wolf" = resolveCategory(
       console.error("Falha ao garantir ticket:", e);
       // segue fluxo
     }
-    // 3.4) Envia email imediatamente (apenas em nova venda)
+    // 3.4) Envia email usando send-ticket-email function (apenas em nova venda)
     try {
       if ((isNewSale || wasNewTicket) && userEmail && participantId) {
         // buscar QR code do ticket
@@ -362,46 +362,40 @@ let assignedCategory: "Wolf Gold" | "Wolf Black" | "VIP Wolf" = resolveCategory(
           .select("qr_code")
           .eq("participant_id", participantId)
           .maybeSingle();
-        const qr = ticketRow?.qr_code ?? participantId;
+        const qrCodeData = ticketRow?.qr_code ?? participantId;
 
-        const subject = "Seu ingresso Wolf Day Brazil";
-        const html = `
-          <div style="font-family:Arial,Helvetica,sans-serif; color:#1f2937;">
-            <h2 style="margin:0 0 12px; font-size:20px; color:#111827;">Olá, ${resolvedName}!</h2>
-            <p style="margin:0 0 8px;">Seu ingresso para o <strong>Wolf Day Brazil</strong> foi gerado com sucesso.</p>
-            <p style="margin:0 0 8px;">Categoria do ingresso: <strong>${assignedCategory}</strong></p>
-            <p style="margin:12px 0 4px;">Apresente este código no acesso:</p>
-            <pre style="background:#f3f4f6; padding:12px; border-radius:8px; font-size:14px;">${qr}</pre>
-            <p style="margin:12px 0 0;">Guarde este email. Nos vemos no evento! 🐺</p>
-          </div>
-        `;
+        try {
+          // Chama a função send-ticket-email para usar o template correto
+          const { data: emailResult, error: emailError } = await supabase.functions.invoke('send-ticket-email', {
+            body: {
+              participantId,
+              participantName: resolvedName,
+              participantEmail: userEmail,
+              participantCategory: assignedCategory,
+              qrCodeData
+            }
+          });
 
-        if (Deno.env.get("RESEND_API_KEY")) {
-          try {
-            await resend.emails.send({
-              from: "Wolf Day Brazil <noreply@wolfdaybr.com.br>",
-              to: [userEmail],
-              subject,
-              html,
-            });
-            console.log(`Email de ingresso enviado para ${userEmail}`);
-          } catch (sendErr) {
-            console.error("Falha ao enviar via Resend, adicionando à fila:", sendErr);
+          if (emailError) {
+            console.error("Erro ao chamar send-ticket-email:", emailError);
+            // Fallback para fila de email se a função falhar
             await supabase.from("email_queue").insert({
               participant_id: participantId,
               email: userEmail,
-              subject,
-              html_content: html,
+              subject: "Seu ingresso Wolf Day Brazil",
+              html_content: `Erro ao processar template. Participante: ${resolvedName}, Categoria: ${assignedCategory}, QR: ${qrCodeData}`,
               status: 'pending',
             });
+          } else {
+            console.log(`Email de ingresso enviado via send-ticket-email para ${userEmail}`);
           }
-        } else {
-          console.warn("RESEND_API_KEY ausente. Encaminhando email para a fila.");
+        } catch (invokErr) {
+          console.error("Falha ao invocar send-ticket-email, adicionando à fila:", invokErr);
           await supabase.from("email_queue").insert({
             participant_id: participantId,
             email: userEmail,
-            subject,
-            html_content: html,
+            subject: "Seu ingresso Wolf Day Brazil",
+            html_content: `Erro ao processar template. Participante: ${resolvedName}, Categoria: ${assignedCategory}, QR: ${qrCodeData}`,
             status: 'pending',
           });
         }
