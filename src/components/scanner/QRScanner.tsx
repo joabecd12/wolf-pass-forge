@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +39,7 @@ export function QRScanner() {
   const [scanMode, setScanMode] = useState<"manual" | "camera">("manual");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const { toast } = useToast();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const getTodayDateBrasilia = () => {
     const now = new Date();
@@ -311,6 +312,71 @@ export function QRScanner() {
     }
   };
 
+  // Auto-focus logic for manual mode
+  useEffect(() => {
+    if (scanMode === "manual" && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [scanMode]);
+
+  useEffect(() => {
+    if (scanMode !== "manual") return;
+
+    const handleFocusLoss = () => {
+      if (scanMode === "manual") {
+        setTimeout(() => {
+          if (inputRef.current && scanMode === "manual") {
+            inputRef.current.focus();
+          }
+        }, 1000);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden && scanMode === "manual" && inputRef.current) {
+        setTimeout(() => {
+          if (inputRef.current && scanMode === "manual") {
+            inputRef.current.focus();
+          }
+        }, 100);
+      }
+    };
+
+    if (inputRef.current) {
+      inputRef.current.addEventListener('blur', handleFocusLoss);
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (inputRef.current) {
+        inputRef.current.removeEventListener('blur', handleFocusLoss);
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [scanMode]);
+
+  // Auto-submit logic for manual input
+  useEffect(() => {
+    if (scanMode !== "manual" || !manualCode.trim() || isValidating) return;
+
+    const code = manualCode.trim();
+    
+    // Check if it's a complete URL or a valid ID pattern
+    const isCompleteUrl = code.startsWith("http") && code.includes("validar?id=");
+    const isValidId = /^[A-F0-9]{8}$/.test(code.toUpperCase()) || // Short ID pattern
+                     /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(code); // UUID pattern
+
+    if (isCompleteUrl || isValidId) {
+      // Small delay to ensure all characters are captured
+      const timer = setTimeout(() => {
+        handleManualValidation();
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [manualCode, scanMode, isValidating]);
+
   const handleManualValidation = () => {
     if (!manualCode.trim()) {
       toast({
@@ -406,6 +472,7 @@ export function QRScanner() {
               <Label htmlFor="manual-code">Código Manual do QR</Label>
               <div className="flex gap-2">
                 <Input
+                  ref={inputRef}
                   id="manual-code"
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value)}
