@@ -6,7 +6,7 @@ import { Resend } from "npm:resend@2.0.0";
 // CORS (útil para testes manuais com cURL e para provedores)
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-hubla-token, x-hubla-webhook-token",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-hubla-token, x-hubla-webhook-token, x-lastlink-token, x-lastlink-webhook-token",
 };
 
 // Resend client para envio imediato de emails
@@ -58,12 +58,15 @@ serve(async (req: Request) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // 1) Autenticação por token fixo
-  const expected = Deno.env.get("HUBLA_WEBHOOK_TOKEN") ?? "";
+  // 1) Autenticação por token fixo (Hubla e Lastlink)
+  const hublaToken = Deno.env.get("HUBLA_WEBHOOK_TOKEN") ?? "";
+  const lastlinkToken = Deno.env.get("LASTLINK_WEBHOOK_TOKEN") ?? "";
   const rawAuth =
     req.headers.get("authorization") ||
     req.headers.get("x-hubla-token") ||
     req.headers.get("x-hubla-webhook-token") ||
+    req.headers.get("x-lastlink-token") ||
+    req.headers.get("x-lastlink-webhook-token") ||
     "";
 
   // Suporta "Bearer <token>" ou valor cru
@@ -72,7 +75,11 @@ serve(async (req: Request) => {
     provided = provided.slice(7).trim();
   }
 
-  if (!expected || !provided || provided !== expected) {
+  let origin: "hubla" | "lastlink" | "unknown" = "unknown";
+  if (provided && hublaToken && provided === hublaToken) origin = "hubla";
+  if (provided && lastlinkToken && provided === lastlinkToken) origin = "lastlink";
+
+  if (origin === "unknown") {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json", ...corsHeaders },
@@ -110,6 +117,8 @@ serve(async (req: Request) => {
 const userEmailV2 = get<string>(event, "user.email")
   ?? get<string>(event, "customer.email")
   ?? get<string>(event, "buyer.email")
+  ?? get<string>(event, "order.customer.email")
+  ?? get<string>(data, "customer.email")
   ?? get<string>(data, "user.email")
   ?? null;
 
@@ -127,7 +136,10 @@ const customerName_v2 = get<string>(event, "customer.name") ?? null;
 
 const v2UserPhone = get<string>(event, "user.phone") ?? null;
 const v2BuyerPhone = get<string>(event, "buyer.phone") ?? null;
-const v2CustomerPhone = get<string>(event, "customer.phone") ?? null;
+const v2CustomerPhone = get<string>(event, "customer.phone")
+  ?? get<string>(event, "order.customer.phone")
+  ?? get<string>(data, "customer.phone")
+  ?? null;
 
 const transactionIdV2 = get<string>(event, "invoice.id")
   ?? get<string>(event, "purchase.id")
@@ -157,8 +169,19 @@ const legacyCustomerPhone = get<string>(data, "customer.phone")
   ?? get<string>(data, "customer.whatsapp")
   ?? get<string>(data, "customer.whatsapp_number")
   ?? null;
-const productName = get<string>(event, "productName") ?? get<string>(data, "productName") ?? null;
-const offerName = get<string>(event, "offerName") ?? get<string>(data, "offerName") ?? null;
+const productName = get<string>(event, "productName")
+  ?? get<string>(data, "productName")
+  ?? get<string>(event, "product.name")
+  ?? get<string>(event, "order.product.name")
+  ?? get<string>(event, "items.0.name")
+  ?? get<string>(event, "items.0.title")
+  ?? get<string>(event, "plan.name")
+  ?? null;
+const offerName = get<string>(event, "offerName")
+  ?? get<string>(data, "offerName")
+  ?? get<string>(event, "offers.0.name")
+  ?? get<string>(event, "products.0.offers.0.name")
+  ?? null;
 const transactionIdLegacy = get<string>(event, "transactionId") ?? get<string>(data, "transactionId") ?? null;
 const totalAmountLegacy = get<number>(event, "totalAmount") ?? get<number>(data, "totalAmount") ?? null;
 const paidAtLegacy = get<string>(event, "paidAt") ?? get<string>(data, "paidAt") ?? null;
@@ -228,7 +251,7 @@ const offerNameV2 = get<string>(event, "products.0.offers.0.name") ?? get<string
 // 2.1) Log de auditoria - salvar bruto
   try {
     await supabase.from("hubla_raw_events").insert({
-      provider: "hubla",
+      provider: origin,
       type,
       transaction_id: transactionId ?? null,
       payload: (typeof data === "object" ? data : { raw: textBody }) as any,
@@ -407,12 +430,12 @@ let assignedCategory: "Wolf Gold" | "Wolf Black" | "VIP Wolf" = resolveCategory(
     status = "processed";
   } catch (err: any) {
     errorMessage = err?.message ?? String(err);
-    console.error("Erro no processamento do webhook Hubla:", err);
+    console.error(`Erro no processamento do webhook (${origin}):`, err);
   } finally {
     // 4) Log final consolidado
     try {
       await supabase.from("webhook_sales_logs").insert({
-        origin: "hubla",
+        origin,
         status,
         raw_payload: (typeof data === "object" ? data : { raw: textBody }) as any,
         buyer_email: userEmail,
