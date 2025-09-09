@@ -111,7 +111,7 @@ serve(async (req: Request) => {
 
   // Normaliza o payload vindo da Hubla
   const event = get<any>(data, "event") ?? data;
-  const type = (get<string>(data, "type") ?? "").toString() || "unknown";
+  const type = (get<string>(data, "type") ?? get<string>(data, "Event") ?? "").toString() || "unknown";
 
 // v2 fields (priorities per Hubla v2 and business rules)
 const userEmailV2 = get<string>(event, "user.email")
@@ -176,6 +176,8 @@ const productName = get<string>(event, "productName")
   ?? get<string>(event, "items.0.name")
   ?? get<string>(event, "items.0.title")
   ?? get<string>(event, "plan.name")
+  ?? get<string>(data, "Data.Products.0.Name")
+  ?? get<string>(data, "Data.Offer.Name")
   ?? null;
 const offerName = get<string>(event, "offerName")
   ?? get<string>(data, "offerName")
@@ -187,16 +189,29 @@ const totalAmountLegacy = get<number>(event, "totalAmount") ?? get<number>(data,
 const paidAtLegacy = get<string>(event, "paidAt") ?? get<string>(data, "paidAt") ?? null;
 const createdAtLegacy = get<string>(event, "createdAt") ?? get<string>(data, "createdAt") ?? null;
 
-// resolved core identifiers (prefer v2)
-const userEmail = userEmailV2 ?? userEmailLegacy;
-const transactionId = transactionIdV2 ?? transactionIdLegacy;
-const paidAt = paidAtV2 ?? paidAtLegacy;
-const createdAt = createdAtV2 ?? createdAtLegacy;
+// Lastlink-specific fields (fallbacks)
+const llEmail = get<string>(data, "Data.Buyer.Email") ?? null;
+const llName = get<string>(data, "Data.Buyer.Name") ?? null;
+const llPhone = get<string>(data, "Data.Buyer.PhoneNumber") ?? null;
+const llTransactionId = get<string>(data, "Data.Purchase.PaymentId") ?? get<string>(data, "Id") ?? null;
+const llProductName = get<string>(data, "Data.Products.0.Name") ?? get<string>(data, "Data.Offer.Name") ?? null;
+const llOfferId = get<string>(data, "Data.Offer.Id") ?? null;
+const llOfferName = get<string>(data, "Data.Offer.Name") ?? null;
+const llPaidAt = get<string>(data, "Data.Purchase.PaymentDate") ?? null;
+const llCreatedAt = get<string>(data, "CreatedAt") ?? null;
+const llPriceValue = get<number>(data, "Data.Purchase.Price.Value") ?? null;
+const llAmountCents = typeof llPriceValue === "number" ? Math.round(llPriceValue * 100) : null;
+const llEventType = get<string>(data, "Event") ?? null;
 
-// resolve amount
-const amountCents = amountCentsV2 ?? null;
+// resolved core identifiers (prefer v2, then lastlink, then legacy)
+const userEmail = userEmailV2 ?? llEmail ?? userEmailLegacy;
+const transactionId = transactionIdV2 ?? llTransactionId ?? transactionIdLegacy;
+const paidAt = paidAtV2 ?? llPaidAt ?? paidAtLegacy;
+const createdAt = createdAtV2 ?? llCreatedAt ?? createdAtLegacy;
+
+// resolve amount (prefer v2 cents, then lastlink cents, then legacy total)
+const amountCents = (amountCentsV2 ?? llAmountCents ?? null);
 const totalAmount = amountCents != null ? amountCents / 100 : (totalAmountLegacy ?? null);
-
 // resolve name (do NOT derive from email)
 const collapseWhitespace = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
 const firstLast = collapseWhitespace([userFirst, userLast].filter(Boolean).join(" "));
@@ -214,6 +229,9 @@ if (firstLast) {
 } else if (collapseWhitespace(customerName_v2)) {
   resolvedName = collapseWhitespace(customerName_v2);
   nameSource = 'customer.name';
+} else if (collapseWhitespace(llName)) {
+  resolvedName = collapseWhitespace(llName);
+  nameSource = 'lastlink.buyer.name';
 } else {
   resolvedName = 'Cliente';
   nameSource = 'fallback';
@@ -225,14 +243,18 @@ const phoneUser = normalizePhone(v2UserPhone);
 const phoneBuyer = normalizePhone(v2BuyerPhone);
 const phoneCustomer = normalizePhone(v2CustomerPhone);
 const phoneLegacy = normalizePhone(legacyCustomerPhone);
+const phoneLastlink = normalizePhone(llPhone);
 let resolvedPhone: string | null = null;
-let phoneSource: 'user.phone' | 'buyer.phone' | 'customer.phone' | 'legacy.whatsapp' | 'none' = 'none';
+let phoneSource: 'user.phone' | 'buyer.phone' | 'customer.phone' | 'lastlink.phone' | 'legacy.whatsapp' | 'none' = 'none';
 if (phoneUser) {
   resolvedPhone = phoneUser;
   phoneSource = 'user.phone';
 } else if (phoneBuyer) {
   resolvedPhone = phoneBuyer;
   phoneSource = 'buyer.phone';
+} else if (phoneLastlink) {
+  resolvedPhone = phoneLastlink;
+  phoneSource = 'lastlink.phone';
 } else if (phoneCustomer) {
   resolvedPhone = phoneCustomer;
   phoneSource = 'customer.phone';
@@ -245,8 +267,14 @@ if (phoneUser) {
 }
 
 // Campos v2 (prioritários) do payload Hubla
-const offerIdV2 = get<string>(event, "products.0.offers.0.id") ?? get<string>(data, "products.0.offers.0.id") ?? null;
-const offerNameV2 = get<string>(event, "products.0.offers.0.name") ?? get<string>(data, "products.0.offers.0.name") ?? null;
+const offerIdV2 = get<string>(event, "products.0.offers.0.id")
+  ?? get<string>(data, "products.0.offers.0.id")
+  ?? llOfferId
+  ?? null;
+const offerNameV2 = get<string>(event, "products.0.offers.0.name")
+  ?? get<string>(data, "products.0.offers.0.name")
+  ?? llOfferName
+  ?? null;
 
 // 2.1) Log de auditoria - salvar bruto
   try {
@@ -283,9 +311,18 @@ let assignedCategory: "Wolf Gold" | "Wolf Black" | "VIP Wolf" = resolveCategory(
     // 3.0) Processa somente eventos pagos quando o status existir
     const knownPaid = new Set(["paid","approved","succeeded","completed","authorized","confirmed","settled"]);
     const hasStatus = typeof invoiceStatus === "string" && invoiceStatus.length > 0;
-    if (hasStatus && !knownPaid.has(invoiceStatus!.toLowerCase())) {
+if (hasStatus && !knownPaid.has(invoiceStatus!.toLowerCase())) {
       status = "skipped_unpaid";
       throw new Error(`Evento ignorado: invoice.status='${invoiceStatus}'`);
+    }
+    // Lastlink: considerar pago se Event === 'Purchase_Order_Confirmed' OU se houver PaymentDate
+    if (origin === "lastlink") {
+      const lastlinkEvent = (llEventType ?? "").toLowerCase();
+      const isPaidLastlink = lastlinkEvent === "purchase_order_confirmed" || !!llPaidAt;
+      if (!isPaidLastlink) {
+        status = "skipped_unpaid";
+        throw new Error(`Evento ignorado (lastlink): Event='${llEventType}', PaymentDate='${llPaidAt}'`);
+      }
     }
     // 3.1) Registra/atualiza venda em wolf_sales (evita duplicar por transaction_id)
     try {
@@ -432,11 +469,16 @@ let assignedCategory: "Wolf Gold" | "Wolf Black" | "VIP Wolf" = resolveCategory(
     errorMessage = err?.message ?? String(err);
     console.error(`Erro no processamento do webhook (${origin}):`, err);
   } finally {
-    // 4) Log final consolidado
+    // 4) Log final consolidado - mapear status para valores aceitos
+    let logStatus: "success" | "duplicate" | "error" = "error";
+    if (status === "processed") logStatus = "success";
+    else if (status === "duplicate") logStatus = "duplicate";
+    else logStatus = "error";
+    
     try {
       await supabase.from("webhook_sales_logs").insert({
         origin,
-        status,
+        status: logStatus,
         raw_payload: (typeof data === "object" ? data : { raw: textBody }) as any,
         buyer_email: userEmail,
         buyer_name: resolvedName,
