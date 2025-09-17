@@ -71,7 +71,7 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
             validated_at
           )
         `)
-        .limit(10000) // Permite até 10.000 participantes
+        .range(0, 9999) // Usa paginação HTTP para contornar limitação PostgREST
         .order("created_at", { ascending: false });
 
       if (error) throw error;
