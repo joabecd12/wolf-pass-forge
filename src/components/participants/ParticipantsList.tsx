@@ -59,6 +59,7 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
 
   const loadParticipants = async () => {
     try {
+      console.log("🔄 Carregando participantes...");
       const { data, error } = await supabase
         .from("participants")
         .select(`
@@ -73,9 +74,11 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setParticipants(data || []);
+      const participantData = data || [];
+      console.log(`✅ ${participantData.length} participantes carregados do banco`);
+      setParticipants(participantData);
     } catch (error) {
-      console.error("Error loading participants:", error);
+      console.error("❌ Error loading participants:", error);
       toast({
         title: "Erro",
         description: "Erro ao carregar participantes",
@@ -93,10 +96,12 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
   // Filter participants based on category and search term
   useEffect(() => {
     let filtered = participants;
+    console.log(`🔍 Aplicando filtros em ${participants.length} participantes`);
     
     // Apply category filter
     if (categoryFilter !== "all") {
       filtered = filtered.filter(p => p.category === categoryFilter);
+      console.log(`📊 Após filtro categoria "${categoryFilter}": ${filtered.length} participantes`);
     }
     
     // Apply search filter
@@ -107,8 +112,10 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
         p.email.toLowerCase().includes(search) ||
         (p.phone && p.phone.toLowerCase().includes(search))
       );
+      console.log(`🔎 Após filtro busca "${searchTerm}": ${filtered.length} participantes`);
     }
     
+    console.log(`✨ Total filtrado final: ${filtered.length} participantes`);
     setFilteredParticipants(filtered);
     setCurrentPage(1); // Reset to first page when filters change
   }, [participants, categoryFilter, searchTerm]);
@@ -336,11 +343,29 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
     }
   };
 
+  const handleForceRefresh = async () => {
+    setIsLoading(true);
+    console.log("🔄 Forçando atualização dos dados...");
+    // Clear all state
+    setParticipants([]);
+    setFilteredParticipants([]);
+    setPaginatedParticipants([]);
+    // Clear filters
+    setCategoryFilter("all");
+    setSearchTerm("");
+    setCurrentPage(1);
+    // Reload data
+    await loadParticipants();
+  };
+
   if (isLoading) {
     return (
       <Card>
-        <CardContent className="p-8 text-center">
-          Carregando participantes...
+        <CardContent className="p-8 text-center space-y-4">
+          <div className="animate-pulse">Carregando participantes...</div>
+          <div className="text-sm text-muted-foreground">
+            Consultando banco de dados...
+          </div>
         </CardContent>
       </Card>
     );
@@ -350,7 +375,21 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
     <Card>
       <CardHeader className="space-y-4">
         <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <span>Participantes ({filteredParticipants.length})</span>
+          <div className="flex items-center gap-4">
+            <span>Participantes ({filteredParticipants.length})</span>
+            <Button
+              onClick={handleForceRefresh}
+              variant="outline" 
+              size="sm"
+              className="flex items-center gap-2"
+              disabled={isLoading}
+            >
+              🔄 Atualizar
+            </Button>
+          </div>
+          <div className="text-sm text-muted-foreground">
+            Total no BD: {participants.length} | Filtrados: {filteredParticipants.length} | Página: {paginatedParticipants.length}
+          </div>
         </CardTitle>
         
         {/* Search and Filters */}
