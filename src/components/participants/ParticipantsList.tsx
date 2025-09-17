@@ -37,8 +37,8 @@ interface ParticipantsListProps {
 
 export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [filteredParticipants, setFilteredParticipants] = useState<Participant[]>([]);
-  const [paginatedParticipants, setPaginatedParticipants] = useState<Participant[]>([]);
+  const [totalBd, setTotalBd] = useState(0);
+  const [totalFiltered, setTotalFiltered] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -57,10 +57,54 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
   const [isSendingEmail, setIsSendingEmail] = useState<string | null>(null);
   const { toast } = useToast();
 
+  const loadTotalCount = async () => {
+    try {
+      const { count, error } = await supabase
+        .from('participants')
+        .select('id', { count: 'exact', head: true });
+      
+      if (error) throw error;
+      setTotalBd(count ?? 0);
+    } catch (error) {
+      console.error("❌ Error loading total count:", error);
+    }
+  };
+
+  const loadFilteredCount = async () => {
+    try {
+      let query = supabase
+        .from('participants')
+        .select('id', { count: 'exact', head: true });
+
+      // Apply category filter
+      if (categoryFilter !== "all") {
+        query = query.eq('category', categoryFilter as "Wolf Gold" | "Wolf Black" | "VIP Wolf");
+      }
+      
+      // Apply search filter
+      if (searchTerm.trim()) {
+        const search = searchTerm.toLowerCase();
+        query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
+      }
+
+      const { count, error } = await query;
+      
+      if (error) throw error;
+      setTotalFiltered(count ?? 0);
+    } catch (error) {
+      console.error("❌ Error loading filtered count:", error);
+    }
+  };
+
   const loadParticipants = async () => {
     try {
       console.log("🔄 Carregando participantes...");
-      const { data, error } = await supabase
+      
+      // Calculate pagination range
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+
+      let query = supabase
         .from("participants")
         .select(`
           *,
@@ -71,12 +115,25 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
             validated_at
           )
         `)
-        .range(0, 9999) // Usa paginação HTTP para contornar limitação PostgREST
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      // Apply category filter
+      if (categoryFilter !== "all") {
+        query = query.eq('category', categoryFilter as "Wolf Gold" | "Wolf Black" | "VIP Wolf");
+      }
+      
+      // Apply search filter
+      if (searchTerm.trim()) {
+        const search = searchTerm.toLowerCase();
+        query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       const participantData = data || [];
-      console.log(`✅ ${participantData.length} participantes carregados do banco`);
+      console.log(`✅ ${participantData.length} participantes carregados da página ${currentPage}`);
       setParticipants(participantData);
     } catch (error) {
       console.error("❌ Error loading participants:", error);
@@ -91,49 +148,26 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
   };
 
   useEffect(() => {
+    loadTotalCount();
+    loadFilteredCount();
     loadParticipants();
   }, [refreshTrigger]);
 
-  // Filter participants based on category and search term
   useEffect(() => {
-    let filtered = participants;
-    console.log(`🔍 Aplicando filtros em ${participants.length} participantes`);
-    
-    // Apply category filter
-    if (categoryFilter !== "all") {
-      filtered = filtered.filter(p => p.category === categoryFilter);
-      console.log(`📊 Após filtro categoria "${categoryFilter}": ${filtered.length} participantes`);
-    }
-    
-    // Apply search filter
-    if (searchTerm.trim()) {
-      const search = searchTerm.toLowerCase();
-      filtered = filtered.filter(p => 
-        p.name.toLowerCase().includes(search) ||
-        p.email.toLowerCase().includes(search) ||
-        (p.phone && p.phone.toLowerCase().includes(search))
-      );
-      console.log(`🔎 Após filtro busca "${searchTerm}": ${filtered.length} participantes`);
-    }
-    
-    console.log(`✨ Total filtrado final: ${filtered.length} participantes`);
-    setFilteredParticipants(filtered);
-    setCurrentPage(1); // Reset to first page when filters change
-  }, [participants, categoryFilter, searchTerm]);
+    loadFilteredCount();
+    setCurrentPage(1);
+  }, [categoryFilter, searchTerm]);
 
-  // Handle pagination
   useEffect(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    setPaginatedParticipants(filteredParticipants.slice(startIndex, endIndex));
-  }, [filteredParticipants, currentPage, itemsPerPage]);
+    loadParticipants();
+  }, [currentPage, itemsPerPage, categoryFilter, searchTerm]);
 
   // Save items per page to localStorage
   useEffect(() => {
     localStorage.setItem('participants-per-page', itemsPerPage.toString());
   }, [itemsPerPage]);
 
-  const totalPages = Math.ceil(filteredParticipants.length / itemsPerPage);
+  const totalPages = Math.ceil(totalFiltered / itemsPerPage);
 
   const handleItemsPerPageChange = (value: string) => {
     setItemsPerPage(parseInt(value));
@@ -278,26 +312,148 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
     document.body.removeChild(link);
   };
 
-  const handleExportVisible = () => {
-    const currentDate = new Date().toISOString().split('T')[0];
-    const filename = `participantes-wolfday-${currentDate}.csv`;
-    exportToCSV(filteredParticipants, filename);
-    
-    toast({
-      title: "Exportação concluída!",
-      description: `${filteredParticipants.length} participantes exportados`,
-    });
+  const loadAllParticipants = async () => {
+    try {
+      const allParticipants: Participant[] = [];
+      const batchSize = 1000;
+      let from = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const to = from + batchSize - 1;
+        
+        let query = supabase
+          .from("participants")
+          .select(`
+            *,
+            tickets (
+              id,
+              qr_code,
+              is_validated,
+              validated_at
+            )
+          `)
+          .order("created_at", { ascending: false })
+          .range(from, to);
+
+        // Apply category filter if exists
+        if (categoryFilter !== "all") {
+          query = query.eq('category', categoryFilter as "Wolf Gold" | "Wolf Black" | "VIP Wolf");
+        }
+        
+        // Apply search filter if exists
+        if (searchTerm.trim()) {
+          const search = searchTerm.toLowerCase();
+          query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
+        }
+
+        const { data, error } = await query;
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allParticipants.push(...data);
+          from += batchSize;
+          hasMore = data.length === batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      return allParticipants;
+    } catch (error) {
+      console.error("❌ Error loading all participants:", error);
+      throw error;
+    }
   };
 
-  const handleExportAll = () => {
-    const currentDate = new Date().toISOString().split('T')[0];
-    const filename = `participantes-wolfday-todos-${currentDate}.csv`;
-    exportToCSV(participants, filename);
-    
-    toast({
-      title: "Exportação concluída!",
-      description: `${participants.length} participantes exportados`,
-    });
+  const handleExportVisible = async () => {
+    try {
+      const currentDate = new Date().toISOString().split('T')[0];
+      const filename = `participantes-wolfday-filtrados-${currentDate}.csv`;
+      
+      toast({
+        title: "Carregando dados...",
+        description: "Buscando participantes para exportação",
+      });
+
+      const allFilteredParticipants = await loadAllParticipants();
+      exportToCSV(allFilteredParticipants, filename);
+      
+      toast({
+        title: "Exportação concluída!",
+        description: `${allFilteredParticipants.length} participantes exportados`,
+      });
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Erro ao exportar participantes",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleExportAll = async () => {
+    try {
+      const currentDate = new Date().toISOString().split('T')[0];
+      const filename = `participantes-wolfday-todos-${currentDate}.csv`;
+      
+      toast({
+        title: "Carregando dados...",
+        description: "Buscando todos os participantes para exportação",
+      });
+
+      // Reset filters to get all participants
+      const originalCategoryFilter = categoryFilter;
+      const originalSearchTerm = searchTerm;
+      
+      // Temporarily clear filters to get all data
+      const allParticipants: Participant[] = [];
+      const batchSize = 1000;
+      let from = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const to = from + batchSize - 1;
+        
+        const { data, error } = await supabase
+          .from("participants")
+          .select(`
+            *,
+            tickets (
+              id,
+              qr_code,
+              is_validated,
+              validated_at
+            )
+          `)
+          .order("created_at", { ascending: false })
+          .range(from, to);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allParticipants.push(...data);
+          from += batchSize;
+          hasMore = data.length === batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      exportToCSV(allParticipants, filename);
+      
+      toast({
+        title: "Exportação concluída!",
+        description: `${allParticipants.length} participantes exportados`,
+      });
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Erro ao exportar todos os participantes",
+        variant: "destructive",
+      });
+    }
   };
 
   const resendEmail = async (participant: Participant) => {
@@ -349,13 +505,15 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
     console.log("🔄 Forçando atualização dos dados...");
     // Clear all state
     setParticipants([]);
-    setFilteredParticipants([]);
-    setPaginatedParticipants([]);
+    setTotalBd(0);
+    setTotalFiltered(0);
     // Clear filters
     setCategoryFilter("all");
     setSearchTerm("");
     setCurrentPage(1);
     // Reload data
+    await loadTotalCount();
+    await loadFilteredCount();
     await loadParticipants();
   };
 
@@ -377,7 +535,7 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
       <CardHeader className="space-y-4">
         <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <span>Participantes ({filteredParticipants.length})</span>
+            <span>Participantes ({totalFiltered})</span>
             <Button
               onClick={handleForceRefresh}
               variant="outline" 
@@ -389,7 +547,7 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
             </Button>
           </div>
           <div className="text-sm text-muted-foreground">
-            Total no BD: {participants.length} | Filtrados: {filteredParticipants.length} | Página: {paginatedParticipants.length}
+            Total no BD: {totalBd} | Filtrados: {totalFiltered} | Página: {participants.length}
           </div>
         </CardTitle>
         
@@ -435,7 +593,7 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
               Exportar Participantes
             </Button>
             
-            {filteredParticipants.length !== participants.length && (
+            {(categoryFilter !== "all" || searchTerm.trim()) && (
               <Button
                 onClick={handleExportAll}
                 variant="outline"
@@ -473,9 +631,9 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
         </div>
       </CardHeader>
       <CardContent>
-        {filteredParticipants.length === 0 ? (
+        {totalFiltered === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
-            {participants.length === 0 ? "Nenhum participante cadastrado" : "Nenhum participante encontrado para esta categoria"}
+            {totalBd === 0 ? "Nenhum participante cadastrado" : "Nenhum participante encontrado para os filtros aplicados"}
           </div>
         ) : (
           <>
@@ -492,7 +650,7 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedParticipants.map((participant) => {
+                  {participants.map((participant) => {
                     const ticket = participant.tickets[0];
                     return (
                       <TableRow key={participant.id}>
@@ -589,7 +747,7 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
 
             {/* Mobile Cards View */}
             <div className="lg:hidden space-y-3">
-              {paginatedParticipants.map((participant) => {
+              {participants.map((participant) => {
                 const ticket = participant.tickets[0];
                 return (
                   <Card key={participant.id} className="p-4 border border-border/50">
