@@ -71,6 +71,7 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
             validated_at
           )
         `)
+        .limit(10000) // Permite até 10.000 participantes
         .order("created_at", { ascending: false });
 
       if (error) throw error;
