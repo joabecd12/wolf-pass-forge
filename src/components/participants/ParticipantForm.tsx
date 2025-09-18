@@ -195,6 +195,7 @@ export function ParticipantForm({ onParticipantAdded }: ParticipantFormProps) {
                 <SelectItem value="Wolf Gold">Wolf Gold</SelectItem>
                 <SelectItem value="Wolf Black">Wolf Black</SelectItem>
                 <SelectItem value="VIP Wolf">VIP Wolf</SelectItem>
+                <SelectItem value="Camarote">Camarote</SelectItem>
               </SelectContent>
             </Select>
           </div>

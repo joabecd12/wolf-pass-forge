@@ -349,7 +349,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      ticket_category: "Wolf Gold" | "Wolf Black" | "VIP Wolf"
+      ticket_category: "Wolf Gold" | "Wolf Black" | "VIP Wolf" | "Camarote"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -477,7 +477,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      ticket_category: ["Wolf Gold", "Wolf Black", "VIP Wolf"],
+      ticket_category: ["Wolf Gold", "Wolf Black", "VIP Wolf", "Camarote"],
     },
   },
 } as const
