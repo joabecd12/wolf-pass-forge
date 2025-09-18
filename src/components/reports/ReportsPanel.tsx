@@ -38,48 +38,81 @@ export function ReportsPanel() {
   const [recentValidations, setRecentValidations] = useState<RecentValidation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadStats = async () => {
-    try {
-      // Get participants with tickets
-      const { data: participants, error } = await supabase
+  const loadTotalParticipants = async () => {
+    const { count, error } = await supabase
+      .from("participants")
+      .select("id", { count: 'exact', head: true });
+    
+    if (error) throw error;
+    return count || 0;
+  };
+
+  const loadValidatedCount = async () => {
+    const { count, error } = await supabase
+      .from("tickets")
+      .select("id", { count: 'exact', head: true })
+      .eq("is_validated", true);
+    
+    if (error) throw error;
+    return count || 0;
+  };
+
+  const loadCategoryStats = async () => {
+    // Get all participants in batches to calculate category stats
+    const batchSize = 1000;
+    let offset = 0;
+    const categoryStats: Record<string, { total: number; validated: number }> = {};
+    
+    while (true) {
+      const { data: batch, error } = await supabase
         .from("participants")
         .select(`
-          id,
           category,
           tickets (
-            id,
             is_validated
           )
-        `);
+        `)
+        .range(offset, offset + batchSize - 1);
 
       if (error) throw error;
+      if (!batch || batch.length === 0) break;
 
-      // Calculate stats
-      const stats: Stats = {
-        total: participants?.length || 0,
-        validated: 0,
-        pending: 0,
-        byCategory: {}
-      };
-
-      participants?.forEach(participant => {
-        const ticket = participant.tickets[0];
+      batch.forEach(participant => {
         const category = participant.category;
+        const ticket = participant.tickets[0];
 
-        // Initialize category if not exists
-        if (!stats.byCategory[category]) {
-          stats.byCategory[category] = { total: 0, validated: 0 };
+        if (!categoryStats[category]) {
+          categoryStats[category] = { total: 0, validated: 0 };
         }
 
-        stats.byCategory[category].total++;
-
+        categoryStats[category].total++;
         if (ticket?.is_validated) {
-          stats.validated++;
-          stats.byCategory[category].validated++;
-        } else {
-          stats.pending++;
+          categoryStats[category].validated++;
         }
       });
+
+      if (batch.length < batchSize) break;
+      offset += batchSize;
+    }
+
+    return categoryStats;
+  };
+
+  const loadStats = async () => {
+    try {
+      // Load all stats in parallel
+      const [total, validated, byCategory] = await Promise.all([
+        loadTotalParticipants(),
+        loadValidatedCount(),
+        loadCategoryStats()
+      ]);
+
+      const stats: Stats = {
+        total,
+        validated,
+        pending: total - validated,
+        byCategory
+      };
 
       setStats(stats);
 

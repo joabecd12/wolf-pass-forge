@@ -56,7 +56,6 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState<string | null>(null);
   const { toast } = useToast();
-  console.log("🔄 ParticipantsList component loaded - v2"); // Force recompilation
 
   const loadTotalCount = async () => {
     try {
