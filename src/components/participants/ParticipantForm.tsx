@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus } from "lucide-react";
+import { toTitleCase } from "@/lib/nameUtils";
 
 interface ParticipantFormProps {
   onParticipantAdded: () => void;
@@ -52,11 +53,14 @@ export function ParticipantForm({ onParticipantAdded }: ParticipantFormProps) {
         return;
       }
 
+      // Format name properly before saving
+      const formattedName = toTitleCase(name.trim());
+
       // Create participant
       const { data: participant, error: participantError } = await supabase
         .from("participants")
         .insert({
-          name,
+          name: formattedName,
           email,
           phone,
           category: category as any,

@@ -346,7 +346,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      normalize_name: {
+        Args: { input_name: string }
+        Returns: string
+      }
     }
     Enums: {
       ticket_category: "Wolf Gold" | "Wolf Black" | "VIP Wolf" | "Camarote"

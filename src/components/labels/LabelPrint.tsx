@@ -120,7 +120,12 @@ export const LabelPrint: React.FC<LabelPrintProps> = ({ participant, onClose }) 
           </div>
           
           <div className="mb-1">
-            <div className="text-xs font-semibold text-black break-words">
+            <div className="text-xs font-semibold text-black break-words leading-tight max-w-full overflow-hidden" style={{
+              fontSize: participant.name.length > 25 ? '9px' : '10px',
+              lineHeight: '1.2',
+              wordBreak: 'break-word',
+              hyphens: 'auto'
+            }}>
               {participant.name}
             </div>
           </div>
@@ -237,12 +242,16 @@ export const printLabel = async (participant: Participant) => {
               }
               
               .participant-name {
-                font-size: 16pt;
+                font-size: 14pt;
                 font-weight: bold;
                 color: #000;
                 margin-bottom: 1mm;
                 line-height: 1.1;
                 word-wrap: break-word;
+                word-break: break-word;
+                hyphens: auto;
+                max-width: 100%;
+                overflow-wrap: break-word;
               }
               
               .participant-category {
