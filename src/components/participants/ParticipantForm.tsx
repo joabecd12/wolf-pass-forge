@@ -83,36 +83,105 @@ export function ParticipantForm({ onParticipantAdded }: ParticipantFormProps) {
 
       if (ticketError) throw ticketError;
 
-      // Send email directly via edge function
+      // Add email to queue for batch processing
       try {
-        const { error: emailError } = await supabase.functions.invoke('send-ticket-email', {
-          body: {
-            participantId: participant.id,
-            participantName: participant.name,
-            participantEmail: participant.email,
-            participantCategory: participant.category,
-            qrCodeData: qrCodeData
-          }
-        });
+        const emailSubject = "Seu ingresso Wolf Day Brazil - Confirmação de Participação";
+        const emailHtml = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Wolf Day Brazil - Seu Ingresso</title>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 20px; }
+              .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+              .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
+              .content { padding: 30px; }
+              .qr-section { text-align: center; background: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 8px; }
+              .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #666; }
+              .btn { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>🐺 Wolf Day Brazil</h1>
+                <p>Parabéns! Sua participação foi confirmada</p>
+              </div>
+              
+              <div class="content">
+                <h2>Olá, ${participant.name}!</h2>
+                <p>Ficamos muito felizes em confirmar sua participação no <strong>Wolf Day Brazil</strong>!</p>
+                
+                <div style="background: #e8f4fd; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                  <h3 style="margin-top: 0; color: #1976d2;">📋 Detalhes da sua participação:</h3>
+                  <p><strong>Nome:</strong> ${participant.name}</p>
+                  <p><strong>Email:</strong> ${participant.email}</p>
+                  <p><strong>Categoria:</strong> ${participant.category}</p>
+                </div>
 
-        if (emailError) {
-          console.error("Email error:", emailError);
+                <div class="qr-section">
+                  <h3>🎫 Seu Ingresso Digital</h3>
+                  <p>Use este QR Code no dia do evento para validar sua entrada:</p>
+                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCodeData)}" alt="QR Code do Ingresso" style="max-width: 200px; height: auto;" />
+                  <p style="font-size: 12px; color: #666; margin-top: 10px;">
+                    <strong>Link de validação:</strong><br>
+                    <a href="${qrCodeData}" style="color: #667eea; word-break: break-all;">${qrCodeData}</a>
+                  </p>
+                </div>
+
+                <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                  <h4 style="margin-top: 0; color: #856404;">⚠️ Informações Importantes:</h4>
+                  <ul style="margin: 0; padding-left: 20px;">
+                    <li>Guarde este email com cuidado - você precisará do QR Code no dia do evento</li>
+                    <li>Chegue com antecedência para validar sua entrada</li>
+                    <li>Em caso de dúvidas, entre em contato conosco</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="footer">
+                <p><strong>Wolf Day Brazil</strong></p>
+                <p>O maior evento de marketing digital do Brasil</p>
+                <p style="font-size: 12px; color: #999;">
+                  Este é um email automático, não responda a esta mensagem.
+                </p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `;
+
+        const { error: queueError } = await supabase
+          .from('email_queue')
+          .insert({
+            participant_id: participant.id,
+            email: participant.email,
+            subject: emailSubject,
+            html_content: emailHtml,
+            status: 'pending',
+            scheduled_at: new Date().toISOString()
+          });
+
+        if (queueError) {
+          console.error("Email queue error:", queueError);
           toast({
             title: "Participante cadastrado",
-            description: "Participante cadastrado com sucesso, mas houve erro ao enviar email",
+            description: "Participante cadastrado com sucesso, mas houve erro ao agendar email",
             variant: "default",
           });
         } else {
           toast({
             title: "Sucesso!",
-            description: "Participante cadastrado e email enviado com sucesso",
+            description: "Participante cadastrado e email agendado para envio",
           });
         }
       } catch (emailError) {
-        console.error("Email error:", emailError);
+        console.error("Email queue error:", emailError);
         toast({
           title: "Participante cadastrado",
-          description: "Participante cadastrado com sucesso, mas houve erro ao enviar email",
+          description: "Participante cadastrado com sucesso, mas houve erro ao agendar email",
           variant: "default",
         });
       }
