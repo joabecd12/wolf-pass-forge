@@ -4,8 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Mail, Play, Pause, RotateCcw, AlertCircle, Search, Calendar, Filter } from "lucide-react";
+import { Mail, Play, Pause, RotateCcw, AlertCircle, Search, Calendar, Filter, Users, Send } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,6 +16,7 @@ import { startOfDay, endOfDay, subDays, subWeeks, subMonths } from 'date-fns';
 
 interface EmailQueueItem {
   id: string;
+  participant_id: string;
   email: string;
   subject: string;
   status: string;
@@ -30,12 +32,18 @@ export const EmailQueueManager = () => {
   const [queueItems, setQueueItems] = useState<EmailQueueItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isBulkAdding, setIsBulkAdding] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(() => {
     const saved = localStorage.getItem('emailQueueItemsPerPage');
     return saved ? parseInt(saved) : 10;
+  });
+  const [participantsStats, setParticipantsStats] = useState({
+    total: 0,
+    withEmails: 0,
+    withoutEmails: 0
   });
   const { toast } = useToast();
 
@@ -97,6 +105,9 @@ export const EmailQueueManager = () => {
 
       if (error) throw error;
       setQueueItems(data || []);
+      
+      // Fetch participants stats
+      await fetchParticipantsStats();
     } catch (error: any) {
       toast({
         title: "Erro",
@@ -105,6 +116,33 @@ export const EmailQueueManager = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchParticipantsStats = async () => {
+    try {
+      // Get total participants count
+      const { count: totalParticipants, error: totalError } = await supabase
+        .from('participants')
+        .select('*', { count: 'exact', head: true });
+
+      if (totalError) throw totalError;
+
+      // Get participants with emails in queue
+      const { data: participantsWithEmails, error: emailError } = await supabase
+        .from('participants')
+        .select('id')
+        .in('id', queueItems.map(item => item.participant_id).filter(Boolean));
+
+      if (emailError) throw emailError;
+
+      setParticipantsStats({
+        total: totalParticipants || 0,
+        withEmails: participantsWithEmails?.length || 0,
+        withoutEmails: (totalParticipants || 0) - (participantsWithEmails?.length || 0)
+      });
+    } catch (error: any) {
+      console.error('Erro ao buscar estatísticas:', error);
     }
   };
 
@@ -171,6 +209,179 @@ export const EmailQueueManager = () => {
         description: `Erro ao reagendar emails: ${error.message}`,
         variant: "destructive",
       });
+    }
+  };
+
+  const sendToAllWithoutEmails = async () => {
+    setIsBulkAdding(true);
+    try {
+      // Get participants without emails in queue
+      const { data: allParticipants, error: participantsError } = await supabase
+        .from('participants')
+        .select('id, name, email');
+
+      if (participantsError) throw participantsError;
+
+      const participantsWithEmails = new Set(queueItems.map(item => item.participant_id).filter(Boolean));
+      const participantsWithoutEmails = allParticipants?.filter(p => !participantsWithEmails.has(p.id)) || [];
+
+      if (participantsWithoutEmails.length === 0) {
+        toast({
+          title: "Informação",
+          description: "Todos os participantes já têm emails na fila",
+        });
+        return;
+      }
+
+      // Create email queue entries for participants without emails
+      const emailsToAdd = participantsWithoutEmails.map(participant => ({
+        participant_id: participant.id,
+        email: participant.email,
+        subject: "Wolf Day Brazil - Seu Ingresso Digital",
+        html_content: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8f9fa; padding: 20px;">
+            <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+              <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #1a202c; margin: 0; font-size: 28px;">Wolf Day Brazil</h1>
+                <p style="color: #4a5568; margin: 10px 0 0 0; font-size: 16px;">Seu ingresso digital chegou!</p>
+              </div>
+              
+              <div style="background-color: #f7fafc; border-radius: 6px; padding: 20px; margin-bottom: 20px;">
+                <h2 style="color: #2d3748; margin: 0 0 15px 0; font-size: 20px;">Olá, ${participant.name}!</h2>
+                <p style="color: #4a5568; margin: 0; line-height: 1.6;">
+                  Seja bem-vindo(a) ao Wolf Day Brazil! Seu ingresso foi confirmado e você está pronto para participar do maior evento de networking e tecnologia do Brasil.
+                </p>
+              </div>
+              
+              <div style="text-align: center; margin: 30px 0;">
+                <div style="background-color: #e2e8f0; border-radius: 6px; padding: 15px; display: inline-block;">
+                  <p style="margin: 0; color: #2d3748; font-weight: bold;">Guarde bem este email!</p>
+                  <p style="margin: 5px 0 0 0; color: #4a5568; font-size: 14px;">Você precisará dele para validar sua entrada no evento</p>
+                </div>
+              </div>
+              
+              <div style="border-top: 1px solid #e2e8f0; padding-top: 20px; margin-top: 30px;">
+                <p style="color: #718096; margin: 0; font-size: 14px; text-align: center;">
+                  Em caso de dúvidas, entre em contato conosco.<br>
+                  Nos vemos no Wolf Day Brazil! 🐺
+                </p>
+              </div>
+            </div>
+          </div>
+        `,
+        status: 'pending',
+        scheduled_at: new Date().toISOString()
+      }));
+
+      const { error: insertError } = await supabase
+        .from('email_queue')
+        .insert(emailsToAdd);
+
+      if (insertError) throw insertError;
+
+      toast({
+        title: "Sucesso",
+        description: `${emailsToAdd.length} emails adicionados à fila para envio`,
+      });
+
+      fetchQueueItems();
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: `Erro ao adicionar emails à fila: ${error.message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsBulkAdding(false);
+    }
+  };
+
+  const sendToAllParticipants = async () => {
+    setIsBulkAdding(true);
+    try {
+      // Clear existing queue first
+      const { error: deleteError } = await supabase
+        .from('email_queue')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+
+      if (deleteError) throw deleteError;
+
+      // Get all participants
+      const { data: allParticipants, error: participantsError } = await supabase
+        .from('participants')
+        .select('id, name, email');
+
+      if (participantsError) throw participantsError;
+
+      if (!allParticipants || allParticipants.length === 0) {
+        toast({
+          title: "Informação",
+          description: "Nenhum participante encontrado",
+        });
+        return;
+      }
+
+      // Create email queue entries for all participants
+      const emailsToAdd = allParticipants.map(participant => ({
+        participant_id: participant.id,
+        email: participant.email,
+        subject: "Wolf Day Brazil - Seu Ingresso Digital",
+        html_content: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8f9fa; padding: 20px;">
+            <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+              <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #1a202c; margin: 0; font-size: 28px;">Wolf Day Brazil</h1>
+                <p style="color: #4a5568; margin: 10px 0 0 0; font-size: 16px;">Seu ingresso digital chegou!</p>
+              </div>
+              
+              <div style="background-color: #f7fafc; border-radius: 6px; padding: 20px; margin-bottom: 20px;">
+                <h2 style="color: #2d3748; margin: 0 0 15px 0; font-size: 20px;">Olá, ${participant.name}!</h2>
+                <p style="color: #4a5568; margin: 0; line-height: 1.6;">
+                  Seja bem-vindo(a) ao Wolf Day Brazil! Seu ingresso foi confirmado e você está pronto para participar do maior evento de networking e tecnologia do Brasil.
+                </p>
+              </div>
+              
+              <div style="text-align: center; margin: 30px 0;">
+                <div style="background-color: #e2e8f0; border-radius: 6px; padding: 15px; display: inline-block;">
+                  <p style="margin: 0; color: #2d3748; font-weight: bold;">Guarde bem este email!</p>
+                  <p style="margin: 5px 0 0 0; color: #4a5568; font-size: 14px;">Você precisará dele para validar sua entrada no evento</p>
+                </div>
+              </div>
+              
+              <div style="border-top: 1px solid #e2e8f0; padding-top: 20px; margin-top: 30px;">
+                <p style="color: #718096; margin: 0; font-size: 14px; text-align: center;">
+                  Em caso de dúvidas, entre em contato conosco.<br>
+                  Nos vemos no Wolf Day Brazil! 🐺
+                </p>
+              </div>
+            </div>
+          </div>
+        `,
+        status: 'pending',
+        scheduled_at: new Date().toISOString()
+      }));
+
+      const { error: insertError } = await supabase
+        .from('email_queue')
+        .insert(emailsToAdd);
+
+      if (insertError) throw insertError;
+
+      toast({
+        title: "Sucesso",
+        description: `${emailsToAdd.length} emails adicionados à fila para envio (fila anterior limpa)`,
+      });
+
+      fetchQueueItems();
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: `Erro ao recriar fila de emails: ${error.message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsBulkAdding(false);
     }
   };
 
@@ -269,7 +480,7 @@ export const EmailQueueManager = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
             <div className="text-center">
               <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
               <div className="text-sm text-muted-foreground">Pendentes</div>
@@ -286,9 +497,17 @@ export const EmailQueueManager = () => {
               <div className="text-2xl font-bold text-red-600">{stats.failed}</div>
               <div className="text-sm text-muted-foreground">Falharam</div>
             </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600">{participantsStats.total}</div>
+              <div className="text-sm text-muted-foreground">Total Participantes</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-orange-600">{participantsStats.withoutEmails}</div>
+              <div className="text-sm text-muted-foreground">Sem Email</div>
+            </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button 
               onClick={processQueue} 
               disabled={isProcessing || stats.pending === 0}
@@ -297,6 +516,62 @@ export const EmailQueueManager = () => {
               <Play className="h-4 w-4" />
               {isProcessing ? "Processando..." : "Processar Fila"}
             </Button>
+            
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  variant="secondary"
+                  disabled={isBulkAdding || participantsStats.withoutEmails === 0}
+                  className="flex items-center gap-2"
+                >
+                  <Users className="h-4 w-4" />
+                  Enviar para Novos ({participantsStats.withoutEmails})
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirmar Envio para Novos Participantes</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação irá adicionar {participantsStats.withoutEmails} emails à fila para participantes que ainda não receberam email.
+                    Os emails serão processados automaticamente.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={sendToAllWithoutEmails} disabled={isBulkAdding}>
+                    {isBulkAdding ? "Adicionando..." : "Confirmar"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  variant="outline"
+                  disabled={isBulkAdding || participantsStats.total === 0}
+                  className="flex items-center gap-2"
+                >
+                  <Send className="h-4 w-4" />
+                  Reenviar para Todos ({participantsStats.total})
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirmar Reenvio para Todos</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    <strong>ATENÇÃO:</strong> Esta ação irá limpar a fila atual e criar novos emails para TODOS os {participantsStats.total} participantes.
+                    Isso significa que pessoas que já receberam email receberão novamente.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={sendToAllParticipants} disabled={isBulkAdding}>
+                    {isBulkAdding ? "Processando..." : "Confirmar Reenvio"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             
             <Button 
               variant="outline" 
