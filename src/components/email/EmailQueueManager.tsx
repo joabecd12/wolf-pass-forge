@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Mail, Play, Pause, RotateCcw, AlertCircle, Search, Calendar, Filter, Users, Send } from "lucide-react";
@@ -44,6 +45,12 @@ export const EmailQueueManager = () => {
     total: 0,
     withEmails: 0,
     withoutEmails: 0
+  });
+  const [batchProgress, setBatchProgress] = useState({
+    current: 0,
+    total: 0,
+    processed: 0,
+    isProcessing: false
   });
   const { toast } = useToast();
 
@@ -298,6 +305,8 @@ export const EmailQueueManager = () => {
 
   const sendToAllParticipants = async () => {
     setIsBulkAdding(true);
+    setBatchProgress({ current: 0, total: 0, processed: 0, isProcessing: true });
+    
     try {
       // Clear existing queue first
       const { error: deleteError } = await supabase
@@ -322,59 +331,103 @@ export const EmailQueueManager = () => {
         return;
       }
 
-      // Create email queue entries for all participants
-      const emailsToAdd = allParticipants.map(participant => ({
-        participant_id: participant.id,
-        email: participant.email,
-        subject: "Wolf Day Brazil - Seu Ingresso Digital",
-        html_content: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8f9fa; padding: 20px;">
-            <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-              <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="color: #1a202c; margin: 0; font-size: 28px;">Wolf Day Brazil</h1>
-                <p style="color: #4a5568; margin: 10px 0 0 0; font-size: 16px;">Seu ingresso digital chegou!</p>
-              </div>
-              
-              <div style="background-color: #f7fafc; border-radius: 6px; padding: 20px; margin-bottom: 20px;">
-                <h2 style="color: #2d3748; margin: 0 0 15px 0; font-size: 20px;">Olá, ${participant.name}!</h2>
-                <p style="color: #4a5568; margin: 0; line-height: 1.6;">
-                  Seja bem-vindo(a) ao Wolf Day Brazil! Seu ingresso foi confirmado e você está pronto para participar do maior evento de networking e tecnologia do Brasil.
-                </p>
-              </div>
-              
-              <div style="text-align: center; margin: 30px 0;">
-                <div style="background-color: #e2e8f0; border-radius: 6px; padding: 15px; display: inline-block;">
-                  <p style="margin: 0; color: #2d3748; font-weight: bold;">Guarde bem este email!</p>
-                  <p style="margin: 5px 0 0 0; color: #4a5568; font-size: 14px;">Você precisará dele para validar sua entrada no evento</p>
+      const BATCH_SIZE = 250; // Process 250 at a time to avoid Supabase limits
+      const totalParticipants = allParticipants.length;
+      const totalBatches = Math.ceil(totalParticipants / BATCH_SIZE);
+      
+      setBatchProgress({ 
+        current: 0, 
+        total: totalBatches, 
+        processed: 0, 
+        isProcessing: true 
+      });
+
+      let totalProcessed = 0;
+
+      // Process in batches
+      for (let i = 0; i < totalBatches; i++) {
+        const startIndex = i * BATCH_SIZE;
+        const endIndex = Math.min(startIndex + BATCH_SIZE, totalParticipants);
+        const batch = allParticipants.slice(startIndex, endIndex);
+
+        // Update progress
+        setBatchProgress(prev => ({ 
+          ...prev, 
+          current: i + 1, 
+          processed: totalProcessed 
+        }));
+
+        // Create email queue entries for this batch
+        const emailsToAdd = batch.map(participant => ({
+          participant_id: participant.id,
+          email: participant.email,
+          subject: "Wolf Day Brazil - Seu Ingresso Digital",
+          html_content: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8f9fa; padding: 20px;">
+              <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                <div style="text-align: center; margin-bottom: 30px;">
+                  <h1 style="color: #1a202c; margin: 0; font-size: 28px;">Wolf Day Brazil</h1>
+                  <p style="color: #4a5568; margin: 10px 0 0 0; font-size: 16px;">Seu ingresso digital chegou!</p>
+                </div>
+                
+                <div style="background-color: #f7fafc; border-radius: 6px; padding: 20px; margin-bottom: 20px;">
+                  <h2 style="color: #2d3748; margin: 0 0 15px 0; font-size: 20px;">Olá, ${participant.name}!</h2>
+                  <p style="color: #4a5568; margin: 0; line-height: 1.6;">
+                    Seja bem-vindo(a) ao Wolf Day Brazil! Seu ingresso foi confirmado e você está pronto para participar do maior evento de networking e tecnologia do Brasil.
+                  </p>
+                </div>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                  <div style="background-color: #e2e8f0; border-radius: 6px; padding: 15px; display: inline-block;">
+                    <p style="margin: 0; color: #2d3748; font-weight: bold;">Guarde bem este email!</p>
+                    <p style="margin: 5px 0 0 0; color: #4a5568; font-size: 14px;">Você precisará dele para validar sua entrada no evento</p>
+                  </div>
+                </div>
+                
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 20px; margin-top: 30px;">
+                  <p style="color: #718096; margin: 0; font-size: 14px; text-align: center;">
+                    Em caso de dúvidas, entre em contato conosco.<br>
+                    Nos vemos no Wolf Day Brazil! 🐺
+                  </p>
                 </div>
               </div>
-              
-              <div style="border-top: 1px solid #e2e8f0; padding-top: 20px; margin-top: 30px;">
-                <p style="color: #718096; margin: 0; font-size: 14px; text-align: center;">
-                  Em caso de dúvidas, entre em contato conosco.<br>
-                  Nos vemos no Wolf Day Brazil! 🐺
-                </p>
-              </div>
             </div>
-          </div>
-        `,
-        status: 'pending',
-        scheduled_at: new Date().toISOString()
+          `,
+          status: 'pending',
+          scheduled_at: new Date().toISOString()
+        }));
+
+        // Insert this batch
+        const { error: insertError } = await supabase
+          .from('email_queue')
+          .insert(emailsToAdd);
+
+        if (insertError) {
+          throw new Error(`Erro no lote ${i + 1}: ${insertError.message}`);
+        }
+
+        totalProcessed += batch.length;
+        
+        // Small delay between batches to avoid overwhelming the database
+        if (i < totalBatches - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+
+      setBatchProgress(prev => ({ 
+        ...prev, 
+        processed: totalProcessed, 
+        isProcessing: false 
       }));
-
-      const { error: insertError } = await supabase
-        .from('email_queue')
-        .insert(emailsToAdd);
-
-      if (insertError) throw insertError;
 
       toast({
         title: "Sucesso",
-        description: `${emailsToAdd.length} emails adicionados à fila para envio (fila anterior limpa)`,
+        description: `Todos os ${totalProcessed} participantes foram adicionados à fila para envio (fila anterior limpa)`,
       });
 
       fetchQueueItems();
     } catch (error: any) {
+      setBatchProgress(prev => ({ ...prev, isProcessing: false }));
       toast({
         title: "Erro",
         description: `Erro ao recriar fila de emails: ${error.message}`,
@@ -506,6 +559,20 @@ export const EmailQueueManager = () => {
               <div className="text-sm text-muted-foreground">Sem Email</div>
             </div>
           </div>
+
+          {/* Progress Bar for Batch Processing */}
+          {batchProgress.isProcessing && (
+            <div className="mb-6 space-y-2">
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Processando lote {batchProgress.current} de {batchProgress.total}</span>
+                <span>{batchProgress.processed} participantes processados</span>
+              </div>
+              <Progress 
+                value={(batchProgress.processed / participantsStats.total) * 100} 
+                className="w-full"
+              />
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2">
             <Button 
