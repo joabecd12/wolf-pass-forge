@@ -233,10 +233,33 @@ export function ParticipantForm({ onParticipantAdded }: ParticipantFormProps) {
             <Input
               id="name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                const inputValue = e.target.value;
+                setName(inputValue);
+                
+                // Show warning for very long names
+                if (inputValue.length > 40) {
+                  toast({
+                    title: "Nome muito longo",
+                    description: "Nomes muito longos podem afetar a impressão do ingresso",
+                    variant: "default",
+                  });
+                }
+              }}
+              onBlur={(e) => {
+                // Auto-format name when user leaves the field
+                const formattedName = toTitleCase(e.target.value);
+                setName(formattedName);
+              }}
               placeholder="Nome completo do participante"
               required
+              className={name.length > 40 ? "border-yellow-500" : ""}
             />
+            {name.length > 40 && (
+              <p className="text-sm text-yellow-600 mt-1">
+                ⚠️ Nome longo ({name.length} caracteres) - pode afetar a impressão
+              </p>
+            )}
           </div>
 
           <div>

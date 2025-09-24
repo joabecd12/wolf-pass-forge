@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Upload, Download, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { toTitleCase } from "@/lib/nameUtils";
 
 interface CSVImportProps {
   onImportComplete: () => void;
@@ -115,7 +116,12 @@ export const CSVImport = ({ onImportComplete }: CSVImportProps) => {
       const participant: any = {};
       
       headers.forEach((header, index) => {
-        participant[header] = values[index] ? values[index].trim() : '';
+        let value = values[index] ? values[index].trim() : '';
+        // Auto-format name to title case
+        if (header === 'nome') {
+          value = toTitleCase(value);
+        }
+        participant[header] = value;
       });
 
       console.log(`Dados da linha ${i + 1}:`, participant);
@@ -123,6 +129,16 @@ export const CSVImport = ({ onImportComplete }: CSVImportProps) => {
       // Validações
       if (!participant.nome || !participant.email || !participant.categoria) {
         throw new Error(`Linha ${i + 1}: dados obrigatórios em branco (nome: "${participant.nome}", email: "${participant.email}", categoria: "${participant.categoria}")`);
+      }
+
+      // Validar comprimento do nome
+      if (participant.nome.length < 2) {
+        throw new Error(`Linha ${i + 1}: nome deve ter pelo menos 2 caracteres. Recebido: "${participant.nome}"`);
+      }
+      
+      // Avisar sobre nomes muito longos
+      if (participant.nome.length > 40) {
+        console.warn(`Linha ${i + 1}: nome longo (${participant.nome.length} chars) pode afetar impressão: "${participant.nome}"`);
       }
 
       // Validar formato do email

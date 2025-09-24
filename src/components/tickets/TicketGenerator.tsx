@@ -160,14 +160,19 @@ export class TicketGenerator {
             ">Participante</h3>
             
             <div style="
-              font-size: ${participant.name.length > 25 ? '20px' : '24px'};
+              font-size: ${participant.name.length > 40 ? '16px' : participant.name.length > 30 ? '18px' : participant.name.length > 25 ? '20px' : '24px'};
               font-weight: bold;
               color: ${categoryColor};
               margin-bottom: 10px;
               word-wrap: break-word;
               word-break: break-word;
               hyphens: auto;
-              line-height: 1.2;
+              line-height: 1.1;
+              max-height: 60px;
+              overflow: hidden;
+              display: -webkit-box;
+              -webkit-line-clamp: 3;
+              -webkit-box-orient: vertical;
               max-width: 100%;
               overflow-wrap: break-word;
             ">${safeName}</div>
