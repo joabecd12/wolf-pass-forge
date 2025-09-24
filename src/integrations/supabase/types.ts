@@ -346,6 +346,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      normalize_email: {
+        Args: { email_text: string }
+        Returns: string
+      }
       normalize_name: {
         Args: { input_name: string }
         Returns: string
