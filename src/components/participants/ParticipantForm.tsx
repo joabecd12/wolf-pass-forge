@@ -36,11 +36,14 @@ export function ParticipantForm({ onParticipantAdded }: ParticipantFormProps) {
     setIsLoading(true);
 
     try {
+      // Normalize email to lowercase for consistency
+      const normalizedEmail = email.toLowerCase().trim();
+      
       // Check if email already exists
       const { data: existingParticipant } = await supabase
         .from("participants")
         .select("id")
-        .eq("email", email)
+        .eq("email", normalizedEmail)
         .maybeSingle();
 
       if (existingParticipant) {
@@ -61,7 +64,7 @@ export function ParticipantForm({ onParticipantAdded }: ParticipantFormProps) {
         .from("participants")
         .insert({
           name: formattedName,
-          email,
+          email: normalizedEmail,
           phone,
           category: category as any,
         })
