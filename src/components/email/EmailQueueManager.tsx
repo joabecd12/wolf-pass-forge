@@ -135,18 +135,24 @@ export const EmailQueueManager = () => {
 
       if (totalError) throw totalError;
 
-      // Get participants with emails in queue
-      const { data: participantsWithEmails, error: emailError } = await supabase
-        .from('participants')
-        .select('id')
-        .in('id', queueItems.map(item => item.participant_id).filter(Boolean));
+      // Get participants with emails in queue - use count instead of select to avoid 1000 limit
+      const participantIdsInQueue = [...new Set(queueItems.map(item => item.participant_id).filter(Boolean))];
+      
+      let participantsWithEmailsCount = 0;
+      if (participantIdsInQueue.length > 0) {
+        const { count: withEmailsCount, error: emailError } = await supabase
+          .from('participants')
+          .select('*', { count: 'exact', head: true })
+          .in('id', participantIdsInQueue);
 
-      if (emailError) throw emailError;
+        if (emailError) throw emailError;
+        participantsWithEmailsCount = withEmailsCount || 0;
+      }
 
       setParticipantsStats({
         total: totalParticipants || 0,
-        withEmails: participantsWithEmails?.length || 0,
-        withoutEmails: (totalParticipants || 0) - (participantsWithEmails?.length || 0)
+        withEmails: participantsWithEmailsCount,
+        withoutEmails: (totalParticipants || 0) - participantsWithEmailsCount
       });
     } catch (error: any) {
       console.error('Erro ao buscar estatísticas:', error);
