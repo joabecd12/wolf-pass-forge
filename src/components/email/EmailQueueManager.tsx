@@ -222,12 +222,28 @@ export const EmailQueueManager = () => {
   const sendToAllWithoutEmails = async () => {
     setIsBulkAdding(true);
     try {
-      // Get participants without emails in queue
-      const { data: allParticipants, error: participantsError } = await supabase
-        .from('participants')
-        .select('id, name, email');
+      // Get participants without emails in queue using pagination
+      let allParticipants: any[] = [];
+      let page = 0;
+      const FETCH_SIZE = 1000;
+      let hasMore = true;
 
-      if (participantsError) throw participantsError;
+      while (hasMore) {
+        const { data: pageData, error: participantsError } = await supabase
+          .from('participants')
+          .select('id, name, email')
+          .range(page * FETCH_SIZE, (page + 1) * FETCH_SIZE - 1);
+
+        if (participantsError) throw participantsError;
+
+        if (pageData && pageData.length > 0) {
+          allParticipants = [...allParticipants, ...pageData];
+          hasMore = pageData.length === FETCH_SIZE;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
 
       const participantsWithEmails = new Set(queueItems.map(item => item.participant_id).filter(Boolean));
       const participantsWithoutEmails = allParticipants?.filter(p => !participantsWithEmails.has(p.id)) || [];
@@ -316,12 +332,28 @@ export const EmailQueueManager = () => {
 
       if (deleteError) throw deleteError;
 
-      // Get all participants
-      const { data: allParticipants, error: participantsError } = await supabase
-        .from('participants')
-        .select('id, name, email');
+      // Get all participants using pagination to bypass 1000 limit
+      let allParticipants: any[] = [];
+      let page = 0;
+      const FETCH_SIZE = 1000;
+      let hasMore = true;
 
-      if (participantsError) throw participantsError;
+      while (hasMore) {
+        const { data: pageData, error: participantsError } = await supabase
+          .from('participants')
+          .select('id, name, email')
+          .range(page * FETCH_SIZE, (page + 1) * FETCH_SIZE - 1);
+
+        if (participantsError) throw participantsError;
+
+        if (pageData && pageData.length > 0) {
+          allParticipants = [...allParticipants, ...pageData];
+          hasMore = pageData.length === FETCH_SIZE;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
 
       if (!allParticipants || allParticipants.length === 0) {
         toast({
