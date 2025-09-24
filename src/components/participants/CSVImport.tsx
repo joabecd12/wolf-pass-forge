@@ -104,7 +104,7 @@ export const CSVImport = ({ onImportComplete }: CSVImportProps) => {
 
     const participants = [];
     const emails = new Set();
-    const validCategories = ['Wolf Gold', 'Wolf Black', 'VIP Wolf'];
+    const validCategories = ['Wolf Gold', 'Wolf Black', 'VIP Wolf', 'Camarote'];
     
     for (let i = 1; i < lines.length; i++) {
       const lineData = lines[i].trim();
@@ -132,7 +132,7 @@ export const CSVImport = ({ onImportComplete }: CSVImportProps) => {
 
       // Validar categoria
       if (!validCategories.includes(participant.categoria)) {
-        throw new Error(`Linha ${i + 1}: categoria deve ser 'Wolf Gold', 'Wolf Black' ou 'VIP Wolf'. Recebido: "${participant.categoria}"`);
+        throw new Error(`Linha ${i + 1}: categoria deve ser 'Wolf Gold', 'Wolf Black', 'VIP Wolf' ou 'Camarote'. Recebido: "${participant.categoria}"`);
       }
 
       // Verificar emails duplicados no CSV

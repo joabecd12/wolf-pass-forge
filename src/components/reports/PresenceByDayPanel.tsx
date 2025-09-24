@@ -139,6 +139,8 @@ export function PresenceByDayPanel() {
         return "bg-wolf-black text-white";
       case "VIP Wolf":
         return "bg-wolf-vip text-white";
+      case "Camarote":
+        return "bg-purple-600 text-white";
       default:
         return "bg-muted";
     }

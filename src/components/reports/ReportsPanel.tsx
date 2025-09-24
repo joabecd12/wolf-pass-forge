@@ -165,7 +165,8 @@ export function ReportsPanel() {
   const COLORS = {
     "Wolf Gold": "#FFA500",
     "Wolf Black": "#262626", 
-    "VIP Wolf": "#B347E6"
+    "VIP Wolf": "#B347E6",
+    "Camarote": "#9333EA"
   };
 
   const getCategoryColor = (category: string) => {
@@ -176,6 +177,8 @@ export function ReportsPanel() {
         return "bg-wolf-black text-white";
       case "VIP Wolf":
         return "bg-wolf-vip text-white";
+      case "Camarote":
+        return "bg-purple-600 text-white";
       default:
         return "bg-muted";
     }

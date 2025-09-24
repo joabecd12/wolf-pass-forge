@@ -186,6 +186,8 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
         return "bg-wolf-black text-white";
       case "VIP Wolf":
         return "bg-wolf-vip text-white";
+      case "Camarote":
+        return "bg-purple-600 text-white";
       default:
         return "bg-muted";
     }
@@ -576,6 +578,7 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
                 <SelectItem value="Wolf Gold">Wolf Gold</SelectItem>
                 <SelectItem value="Wolf Black">Wolf Black</SelectItem>
                 <SelectItem value="VIP Wolf">VIP Wolf</SelectItem>
+                <SelectItem value="Camarote">Camarote</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -942,6 +945,7 @@ export function ParticipantsList({ refreshTrigger }: ParticipantsListProps) {
                   <SelectItem value="Wolf Gold">Wolf Gold</SelectItem>
                   <SelectItem value="Wolf Black">Wolf Black</SelectItem>
                   <SelectItem value="VIP Wolf">VIP Wolf</SelectItem>
+                  <SelectItem value="Camarote">Camarote</SelectItem>
                 </SelectContent>
               </Select>
             </div>

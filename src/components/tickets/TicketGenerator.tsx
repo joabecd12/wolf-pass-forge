@@ -66,6 +66,8 @@ export class TicketGenerator {
           return "#262626";
         case "VIP Wolf":
           return "#B347E6";
+        case "Camarote":
+          return "#9333EA";
         default:
           return "#666666";
       }
