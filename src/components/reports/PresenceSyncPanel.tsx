@@ -31,65 +31,60 @@ export function PresenceSyncPanel() {
   const analyzeData = async () => {
     setIsLoading(true);
     try {
-      // Get all validations for the event date
-      const { data: validations, error: validationsError } = await supabase
+      // Get total validations count for the event date
+      const { count: totalValidations, error: validationsError } = await supabase
         .from('validations')
-        .select(`
-          ticket_id,
-          validated_at,
-          ticket:tickets (
-            participant_id,
-            participant:participants (
-              id,
-              name,
-              presencas
-            )
-          )
-        `)
+        .select('id', { count: 'exact', head: true })
         .gte('validated_at', `${EVENT_DATE}T00:00:00`)
         .lt('validated_at', `${EVENT_DATE}T23:59:59`);
 
       if (validationsError) throw validationsError;
 
-      const totalValidations = validations?.length || 0;
-      
-      // Get unique participants from validations
-      const participantIds = [...new Set(validations?.map(v => v.ticket?.participant?.id).filter(Boolean))];
-      const participantsWithValidations = participantIds.length;
+      // Get all unique participants with validations (no limit)
+      const { data: validations, error: participantsError } = await supabase
+        .from('validations')
+        .select(`
+          ticket:tickets (
+            participant_id,
+            participant:participants (
+              id,
+              presencas
+            )
+          )
+        `)
+        .gte('validated_at', `${EVENT_DATE}T00:00:00`)
+        .lt('validated_at', `${EVENT_DATE}T23:59:59`)
+        .limit(5000); // Set higher limit to get all records
 
-      // Check how many already have presence marked for this date
+      if (participantsError) throw participantsError;
+
+      // Get unique participants
+      const participantMap = new Map();
+      validations?.forEach(validation => {
+        const participant = validation.ticket?.participant;
+        if (participant) {
+          participantMap.set(participant.id, participant);
+        }
+      });
+
+      const participantsWithValidations = participantMap.size;
+
+      // Count participants already marked as present for this date
       let participantsAlreadyMarked = 0;
-      let participantsToSync = 0;
-
-      validations?.forEach(validation => {
-        const participant = validation.ticket?.participant;
-        if (participant) {
-          const presencas = participant.presencas as Record<string, boolean> || {};
-          if (presencas[EVENT_DATE]) {
-            participantsAlreadyMarked++;
-          } else {
-            participantsToSync++;
-          }
+      participantMap.forEach(participant => {
+        const presencas = participant.presencas as Record<string, boolean> || {};
+        if (presencas[EVENT_DATE]) {
+          participantsAlreadyMarked++;
         }
       });
 
-      // Remove duplicates for accurate count
-      const uniqueParticipantsToSync = new Set();
-      validations?.forEach(validation => {
-        const participant = validation.ticket?.participant;
-        if (participant) {
-          const presencas = participant.presencas as Record<string, boolean> || {};
-          if (!presencas[EVENT_DATE]) {
-            uniqueParticipantsToSync.add(participant.id);
-          }
-        }
-      });
+      const participantsToSync = participantsWithValidations - participantsAlreadyMarked;
 
       setStats({
-        totalValidations,
+        totalValidations: totalValidations || 0,
         participantsWithValidations,
-        participantsAlreadyMarked: participantsAlreadyMarked,
-        participantsToSync: uniqueParticipantsToSync.size
+        participantsAlreadyMarked,
+        participantsToSync
       });
 
     } catch (error: any) {
