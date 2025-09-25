@@ -9,6 +9,7 @@ import { Users, CheckCircle, Clock, TrendingUp } from "lucide-react";
 import { EmailQueueManager } from "@/components/email/EmailQueueManager";
 import { PresenceByDayPanel } from "./PresenceByDayPanel";
 import { WebhookLogsPanel } from "./WebhookLogsPanel";
+import { PresenceSyncPanel } from "./PresenceSyncPanel";
 
 interface Stats {
   total: number;
@@ -214,6 +215,7 @@ export function ReportsPanel() {
     <Tabs defaultValue="analytics" className="space-y-6">
       <TabsList>
         <TabsTrigger value="analytics">Análises</TabsTrigger>
+        <TabsTrigger value="sync-presence">Sincronizar Presenças</TabsTrigger>
         <TabsTrigger value="email-queue">Fila de Emails</TabsTrigger>
         <TabsTrigger value="webhook-logs">Logs de Webhooks</TabsTrigger>
       </TabsList>
@@ -374,6 +376,10 @@ export function ReportsPanel() {
             <PresenceByDayPanel />
           </CardContent>
         </Card>
+      </TabsContent>
+
+      <TabsContent value="sync-presence">
+        <PresenceSyncPanel />
       </TabsContent>
 
       <TabsContent value="email-queue">
