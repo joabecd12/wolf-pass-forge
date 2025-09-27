@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Users, QrCode, FileText, LogOut } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { ChangePasswordDialog } from "@/components/auth/ChangePasswordDialog";
 
 interface HeaderProps {
   activeTab: string;
@@ -79,6 +80,10 @@ export function Header({ activeTab, onTabChange }: HeaderProps) {
             <span className="hidden sm:inline">Relatórios</span>
             <span className="sm:hidden">Rel.</span>
           </Button>
+
+          <div className="hidden md:block">
+            <ChangePasswordDialog />
+          </div>
 
           <Button
             variant="outline"

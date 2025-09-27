@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
+import { ForgotPasswordDialog } from "@/components/auth/ForgotPasswordDialog";
 
 export default function AuthPage() {
   const [email, setEmail] = useState("");
@@ -139,11 +140,11 @@ export default function AuthPage() {
               {loading ? "Carregando..." : (isLogin ? "Entrar" : "Criar Conta")}
             </Button>
             
-            <div className="text-center pt-2">
+            <div className="text-center pt-2 space-y-2">
               <button
                 type="button"
                 onClick={() => setIsLogin(!isLogin)}
-                className="text-wolf-gold hover:text-wolf-gold/80 text-sm underline-offset-4 hover:underline transition-colors"
+                className="text-wolf-gold hover:text-wolf-gold/80 text-sm underline-offset-4 hover:underline transition-colors block w-full"
                 disabled={loading}
               >
                 {isLogin 
@@ -151,6 +152,12 @@ export default function AuthPage() {
                   : "Já tem conta? Fazer login"
                 }
               </button>
+              
+              {isLogin && (
+                <div className="pt-1">
+                  <ForgotPasswordDialog />
+                </div>
+              )}
             </div>
           </form>
         </CardContent>
