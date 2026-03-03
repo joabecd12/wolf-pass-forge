@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRows } from "@/lib/supabaseUtils";
 import { toast } from "sonner";
 import { RefreshCw, Users, CheckCircle, AlertTriangle, FileText } from "lucide-react";
 
@@ -40,23 +41,12 @@ export function PresenceSyncPanel() {
 
       if (validationsError) throw validationsError;
 
-      // Get all unique participants with validations (no limit)
-      const { data: validations, error: participantsError } = await supabase
-        .from('validations')
-        .select(`
-          ticket:tickets (
-            participant_id,
-            participant:participants (
-              id,
-              presencas
-            )
-          )
-        `)
-        .gte('validated_at', `${EVENT_DATE}T00:00:00`)
-        .lt('validated_at', `${EVENT_DATE}T23:59:59`)
-        .limit(5000); // Set higher limit to get all records
-
-      if (participantsError) throw participantsError;
+      // Get all unique participants with validations (paginated)
+      const validations = await fetchAllRows(
+        'validations',
+        'ticket:tickets ( participant_id, participant:participants ( id, presencas ) )',
+        (q: any) => q.gte('validated_at', `${EVENT_DATE}T00:00:00`).lt('validated_at', `${EVENT_DATE}T23:59:59`)
+      );
 
       // Get unique participants
       const participantMap = new Map();
@@ -102,22 +92,12 @@ export function PresenceSyncPanel() {
     setSyncResult(null);
 
     try {
-      // Get all validations for the event date again
-      const { data: validations, error: validationsError } = await supabase
-        .from('validations')
-        .select(`
-          ticket:tickets (
-            participant_id,
-            participant:participants (
-              id,
-              presencas
-            )
-          )
-        `)
-        .gte('validated_at', `${EVENT_DATE}T00:00:00`)
-        .lt('validated_at', `${EVENT_DATE}T23:59:59`);
-
-      if (validationsError) throw validationsError;
+      // Get all validations for the event date again (paginated)
+      const validations = await fetchAllRows(
+        'validations',
+        'ticket:tickets ( participant_id, participant:participants ( id, presencas ) )',
+        (q: any) => q.gte('validated_at', `${EVENT_DATE}T00:00:00`).lt('validated_at', `${EVENT_DATE}T23:59:59`)
+      );
 
       // Get unique participants that need syncing
       const participantsToUpdate = new Map();
