@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, Users, TrendingUp, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRows } from "@/lib/supabaseUtils";
 import { format } from 'date-fns-tz';
 
 interface DayPresence {
@@ -30,16 +31,12 @@ export function PresenceByDayPanel() {
 
   const loadPresenceData = async () => {
     try {
-      // Get all participants with their presencas
-      const { data: participants, error } = await supabase
-        .from('participants')
-        .select('id, name, category, presencas')
-        .not('presencas', 'is', null);
-
-      if (error) {
-        console.error('Error loading presence data:', error);
-        return;
-      }
+      // Get all participants with their presencas (paginated to bypass 1000-row limit)
+      const participants = await fetchAllRows(
+        'participants',
+        'id, name, category, presencas',
+        (q: any) => q.not('presencas', 'is', null)
+      );
 
       // Process the data to group by date
       const dateMap = new Map<string, DayPresence>();

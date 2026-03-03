@@ -207,7 +207,7 @@ export type Database = {
       validations: {
         Row: {
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           ticket_id: string
           user_agent: string | null
           validated_at: string
@@ -216,7 +216,7 @@ export type Database = {
         }
         Insert: {
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           ticket_id: string
           user_agent?: string | null
           validated_at?: string
@@ -225,7 +225,7 @@ export type Database = {
         }
         Update: {
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           ticket_id?: string
           user_agent?: string | null
           validated_at?: string
@@ -346,14 +346,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      normalize_email: {
-        Args: { email_text: string }
-        Returns: string
-      }
-      normalize_name: {
-        Args: { input_name: string }
-        Returns: string
-      }
+      normalize_email: { Args: { email_text: string }; Returns: string }
+      normalize_name: { Args: { input_name: string }; Returns: string }
     }
     Enums: {
       ticket_category: "Wolf Gold" | "Wolf Black" | "VIP Wolf" | "Camarote"
