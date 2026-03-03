@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRows } from "@/lib/supabaseUtils";
 import { Mail, Play, Pause, RotateCcw, AlertCircle, Search, Calendar, Filter, Users, Send } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -31,6 +32,7 @@ interface EmailQueueItem {
 
 export const EmailQueueManager = () => {
   const [queueItems, setQueueItems] = useState<EmailQueueItem[]>([]);
+  const [queueStats, setQueueStats] = useState({ pending: 0, sending: 0, sent: 0, failed: 0 });
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isBulkAdding, setIsBulkAdding] = useState(false);
@@ -102,19 +104,47 @@ export const EmailQueueManager = () => {
     }
   };
 
+  const fetchQueueStats = async () => {
+    try {
+      const statuses = ['pending', 'sending', 'sent', 'failed'] as const;
+      const results = await Promise.all(
+        statuses.map(status =>
+          supabase
+            .from('email_queue')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', status)
+        )
+      );
+
+      const counts: Record<string, number> = {};
+      statuses.forEach((status, i) => {
+        if (results[i].error) throw results[i].error;
+        counts[status] = results[i].count || 0;
+      });
+
+      setQueueStats({
+        pending: counts.pending,
+        sending: counts.sending,
+        sent: counts.sent,
+        failed: counts.failed,
+      });
+    } catch (error: any) {
+      console.error('Erro ao buscar estatísticas da fila:', error);
+    }
+  };
+
   const fetchQueueItems = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('email_queue')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setQueueItems(data || []);
+      const allData = await fetchAllRows(
+        'email_queue',
+        '*',
+        (query: any) => query.order('created_at', { ascending: false })
+      );
+      setQueueItems(allData as EmailQueueItem[]);
       
-      // Fetch participants stats
-      await fetchParticipantsStats();
+      // Fetch stats and participants stats in parallel
+      await Promise.all([fetchQueueStats(), fetchParticipantsStats(allData)]);
     } catch (error: any) {
       toast({
         title: "Erro",
@@ -126,8 +156,10 @@ export const EmailQueueManager = () => {
     }
   };
 
-  const fetchParticipantsStats = async () => {
+  const fetchParticipantsStats = async (allQueueItems?: EmailQueueItem[]) => {
     try {
+      const items = allQueueItems || queueItems;
+      
       // Get total participants count
       const { count: totalParticipants, error: totalError } = await supabase
         .from('participants')
@@ -135,19 +167,9 @@ export const EmailQueueManager = () => {
 
       if (totalError) throw totalError;
 
-      // Get participants with emails in queue - use count instead of select to avoid 1000 limit
-      const participantIdsInQueue = [...new Set(queueItems.map(item => item.participant_id).filter(Boolean))];
-      
-      let participantsWithEmailsCount = 0;
-      if (participantIdsInQueue.length > 0) {
-        const { count: withEmailsCount, error: emailError } = await supabase
-          .from('participants')
-          .select('*', { count: 'exact', head: true })
-          .in('id', participantIdsInQueue);
-
-        if (emailError) throw emailError;
-        participantsWithEmailsCount = withEmailsCount || 0;
-      }
+      // Get unique participant IDs from queue
+      const participantIdsInQueue = [...new Set(items.map(item => item.participant_id).filter(Boolean))];
+      const participantsWithEmailsCount = participantIdsInQueue.length;
 
       setParticipantsStats({
         total: totalParticipants || 0,
@@ -498,14 +520,7 @@ export const EmailQueueManager = () => {
     );
   };
 
-  const getQueueStats = () => {
-    const pending = queueItems.filter(item => item.status === 'pending').length;
-    const sent = queueItems.filter(item => item.status === 'sent').length;
-    const failed = queueItems.filter(item => item.status === 'failed').length;
-    const sending = queueItems.filter(item => item.status === 'sending').length;
-
-    return { pending, sent, failed, sending };
-  };
+  const getQueueStats = () => queueStats;
 
   // Filter emails based on search term and date
   const filteredItems = queueItems.filter(item => {
