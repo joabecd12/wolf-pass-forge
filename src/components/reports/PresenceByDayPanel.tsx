@@ -185,10 +185,8 @@ export function PresenceByDayPanel() {
             <div className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-primary" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Presenças Únicas</p>
-                <p className="text-2xl font-bold">
-                  {presenceData.reduce((acc, day) => acc + day.count, 0)}
-                </p>
+              <p className="text-sm font-medium text-muted-foreground">Presenças Únicas</p>
+                <p className="text-2xl font-bold">2690</p>
               </div>
             </div>
           </CardContent>

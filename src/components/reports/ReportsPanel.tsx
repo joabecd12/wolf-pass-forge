@@ -101,17 +101,18 @@ export function ReportsPanel() {
 
   const loadStats = async () => {
     try {
-      // Load all stats in parallel
-      const [total, validated, byCategory] = await Promise.all([
-        loadTotalParticipants(),
-        loadValidatedCount(),
-        loadCategoryStats()
-      ]);
+      // Load category stats from DB
+      const byCategory = await loadCategoryStats();
+
+      // Valores fixos do evento real (incluindo quem entrou sem escanear)
+      const total = 3044;
+      const validated = 2690;
+      const pending = 354;
 
       const stats: Stats = {
         total,
         validated,
-        pending: total - validated,
+        pending,
         byCategory
       };
 
