@@ -72,12 +72,8 @@ export function PresenceByDayPanel() {
       setPresenceData(sortedData);
       setFilteredPresenceData(sortedData);
       
-      // Get total registered participants
-      const { count } = await supabase
-        .from('participants')
-        .select('*', { count: 'exact', head: true });
-      
-      setTotalParticipants(count || 0);
+      // Total real de pessoas no evento (incluindo quem entrou sem escanear)
+      setTotalParticipants(2690);
     } catch (error) {
       console.error('Error loading presence data:', error);
     } finally {
