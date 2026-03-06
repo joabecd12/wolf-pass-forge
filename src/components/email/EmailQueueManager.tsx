@@ -768,6 +768,9 @@ export const EmailQueueManager = () => {
                   <SelectItem value="1000">1000</SelectItem>
                   <SelectItem value="2000">2000</SelectItem>
                   <SelectItem value="4000">4000</SelectItem>
+                  <SelectItem value="6000">6000</SelectItem>
+                  <SelectItem value="8000">8000</SelectItem>
+                  <SelectItem value="10000">10000</SelectItem>
                 </SelectContent>
               </Select>
               <span className="text-sm text-muted-foreground whitespace-nowrap">por página</span>
