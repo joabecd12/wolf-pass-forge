@@ -763,6 +763,11 @@ export const EmailQueueManager = () => {
                   <SelectItem value="30">30</SelectItem>
                   <SelectItem value="50">50</SelectItem>
                   <SelectItem value="100">100</SelectItem>
+                  <SelectItem value="250">250</SelectItem>
+                  <SelectItem value="500">500</SelectItem>
+                  <SelectItem value="1000">1000</SelectItem>
+                  <SelectItem value="2000">2000</SelectItem>
+                  <SelectItem value="4000">4000</SelectItem>
                 </SelectContent>
               </Select>
               <span className="text-sm text-muted-foreground whitespace-nowrap">por página</span>
@@ -834,17 +839,35 @@ export const EmailQueueManager = () => {
                         />
                       </PaginationItem>
                       
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                        <PaginationItem key={page}>
-                          <PaginationLink
-                            onClick={() => setCurrentPage(page)}
-                            isActive={currentPage === page}
-                            className="cursor-pointer"
-                          >
-                            {page}
-                          </PaginationLink>
-                        </PaginationItem>
-                      ))}
+                      {(() => {
+                        const pages: number[] = [];
+                        if (totalPages <= 7) {
+                          for (let i = 1; i <= totalPages; i++) pages.push(i);
+                        } else {
+                          pages.push(1);
+                          if (currentPage > 3) pages.push(-1); // ellipsis
+                          const start = Math.max(2, currentPage - 1);
+                          const end = Math.min(totalPages - 1, currentPage + 1);
+                          for (let i = start; i <= end; i++) pages.push(i);
+                          if (currentPage < totalPages - 2) pages.push(-2); // ellipsis
+                          pages.push(totalPages);
+                        }
+                        return pages.map((page, idx) => (
+                          <PaginationItem key={idx}>
+                            {page < 0 ? (
+                              <span className="px-2 text-muted-foreground">…</span>
+                            ) : (
+                              <PaginationLink
+                                onClick={() => setCurrentPage(page)}
+                                isActive={currentPage === page}
+                                className="cursor-pointer"
+                              >
+                                {page}
+                              </PaginationLink>
+                            )}
+                          </PaginationItem>
+                        ));
+                      })()}
                       
                       <PaginationItem>
                         <PaginationNext 
