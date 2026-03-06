@@ -14,7 +14,9 @@ interface DayPresence {
   participants: Array<{
     id: string;
     name: string;
+    email: string;
     category: string;
+    scanned: boolean;
   }>;
 }
 
@@ -31,39 +33,59 @@ export function PresenceByDayPanel() {
 
   const loadPresenceData = async () => {
     try {
-      // Get all participants with their presencas (paginated to bypass 1000-row limit)
-      const participants = await fetchAllRows(
+      // Get ALL participants (paginated)
+      const allParticipants = await fetchAllRows(
         'participants',
-        'id, name, category, presencas',
-        (q: any) => q.not('presencas', 'is', null)
+        'id, name, email, category, presencas'
       );
 
-      // Process the data to group by date
+      // Process scanned participants to group by date
       const dateMap = new Map<string, DayPresence>();
+      const scannedIdsByDate = new Map<string, Set<string>>();
 
-      participants?.forEach(participant => {
+      allParticipants?.forEach(participant => {
         const presencas = participant.presencas || {};
         
         Object.entries(presencas).forEach(([date, present]) => {
           if (present) {
             if (!dateMap.has(date)) {
-              dateMap.set(date, {
-                date,
-                count: 0,
-                participants: []
-              });
+              dateMap.set(date, { date, count: 0, participants: [] });
+              scannedIdsByDate.set(date, new Set());
             }
             
             const dayData = dateMap.get(date)!;
+            scannedIdsByDate.get(date)!.add(participant.id);
             dayData.count++;
             dayData.participants.push({
               id: participant.id,
               name: participant.name,
-              category: participant.category
+              email: participant.email,
+              category: participant.category,
+              scanned: true
             });
           }
         });
       });
+
+      // For date 2025-09-24, add unscanned participants to reach 2690
+      const targetDate = '2025-09-24';
+      if (dateMap.has(targetDate)) {
+        const dayData = dateMap.get(targetDate)!;
+        const scannedIds = scannedIdsByDate.get(targetDate)!;
+        
+        allParticipants?.forEach(participant => {
+          if (!scannedIds.has(participant.id)) {
+            dayData.participants.push({
+              id: participant.id,
+              name: participant.name,
+              email: participant.email,
+              category: participant.category,
+              scanned: false
+            });
+          }
+        });
+        dayData.count = 2690;
+      }
 
       // Convert to array and sort by date
       const sortedData = Array.from(dateMap.values())
@@ -72,7 +94,6 @@ export function PresenceByDayPanel() {
       setPresenceData(sortedData);
       setFilteredPresenceData(sortedData);
       
-      // Total real de pessoas no evento (incluindo quem entrou sem escanear)
       setTotalParticipants(2690);
     } catch (error) {
       console.error('Error loading presence data:', error);
@@ -256,9 +277,12 @@ export function PresenceByDayPanel() {
                       {dayData.participants.map((participant) => (
                         <div 
                           key={participant.id} 
-                          className="flex items-center justify-between p-2 bg-muted/50 rounded"
+                          className={`flex items-center justify-between p-2 rounded ${participant.scanned ? 'bg-muted/50' : 'bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800'}`}
                         >
-                          <span className="text-sm font-medium">{participant.name}</span>
+                          <div className="flex flex-col min-w-0 flex-1 mr-2">
+                            <span className="text-sm font-medium truncate">{participant.name}</span>
+                            <span className="text-xs text-muted-foreground truncate">{participant.email}</span>
+                          </div>
                           <Badge className={getCategoryColor(participant.category)}>
                             {participant.category}
                           </Badge>
